@@ -1,0 +1,8 @@
+# Painel IA WinGo
+
+Painel web (Flask) que busca resultados da API POPBRA, gera previsões (Grande/Pequeno) com aprendizado contínuo e exibe painel estilo azul néon.
+
+## Como rodar local (Pydroid3 / PC)
+1. Criar pasta `painel-wingo` e subpastas `templates` e `data`.
+2. Colocar `app.py` e `templates/painel.html` conforme o repositório.
+3. Instalar dependências:
