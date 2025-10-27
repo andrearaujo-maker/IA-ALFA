@@ -91,8 +91,8 @@ async function refresh(){
       signalEl.style.textShadow = '';
     }
 
-    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf !== null ? conf + '%' : '-')
-      + ' • Acurácia: ' + (st.accuracy !== undefined ? st.accuracy + '%' : (st.accuracy || '-'));
+    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf !== null ? conf + '%' : '-') +
+      ' • Acurácia: ' + (st.accuracy !== undefined ? st.accuracy + '%' : (st.accuracy || '-'));
 
     document.getElementById('period').innerText = 'Próximo Período: ' + (next_issue || '-');
 
