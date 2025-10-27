@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: painel-ia-wingo
+    name: painel-wingo
     env: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python app.py"
