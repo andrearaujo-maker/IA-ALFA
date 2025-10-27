@@ -9,8 +9,9 @@ from collections import defaultdict
 app = Flask(__name__, template_folder="templates")
 
 # ---------- CONFIG ----------
+# Ajuste a API_URL para a API POPBRA que você usa (exemplo genérico)
 API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-FETCH_INTERVAL = 5               # segundos
+FETCH_INTERVAL = 5               # segundos entre fetchs
 KEEP_LAST = 300                  # histórico mantido
 STATE_FILE = "data/state_wingo.json"
 TRAIN_FILE = "data/treinamento.json"
@@ -22,7 +23,7 @@ gp_history = []    # 'G' ou 'P'
 last_issue = None
 
 pattern_db = defaultdict(lambda: {"G": 0.0, "P": 0.0})
-signals = []       # fila de previsões (pending/evaluated)
+signals = []       # lista de sinais (pending/evaluated)
 stats = {"total": 0, "correct": 0, "accuracy": 0.0, "since": None}
 
 # Perceptron online
@@ -34,7 +35,7 @@ REGULARIZATION = 0.0001
 
 WINDOW_SIZES = [3,4,5,6]
 
-# ---------- UTIL: criar pasta data ----------
+# ---------- GARANTIR PASTA data ----------
 if not os.path.exists("data"):
     try:
         os.makedirs("data")
@@ -58,13 +59,12 @@ def load_state():
                 perceptron["weights"] = p.get("weights")
                 perceptron["n_features"] = p.get("n_features")
             print("[STATE] carregado")
-        # load training file if exists
+        # load training file if exists (merge stats)
         if os.path.exists(TRAIN_FILE):
             try:
                 with open(TRAIN_FILE, "r", encoding="utf-8") as f:
                     tr = json.load(f)
-                # merge stats if present
-                s = tr.get("stats")
+                s = tr.get("meta", {}).get("stats")
                 if s:
                     stats.update(s)
             except:
@@ -85,14 +85,16 @@ def save_state():
         print("[STATE] save error:", e)
 
 def save_training_sample(sample_obj):
-    """append simple training sample to TRAIN_FILE (keeps history)"""
+    """append sample to TRAIN_FILE; stores an array of samples and meta stats"""
     try:
         arr = []
         if os.path.exists(TRAIN_FILE):
             with open(TRAIN_FILE, "r", encoding="utf-8") as f:
-                arr = json.load(f) or []
+                try:
+                    arr = json.load(f) or []
+                except:
+                    arr = []
         arr.append(sample_obj)
-        # limit size to 5000
         if len(arr) > 5000:
             arr = arr[-5000:]
         with open(TRAIN_FILE, "w", encoding="utf-8") as f:
@@ -123,7 +125,7 @@ def update_history():
         return False
     take = min(len(lst), KEEP_LAST)
     slice_items = lst[:take]
-    slice_items = list(reversed(slice_items))  # antiga -> nova
+    slice_items = list(reversed(slice_items))  # from oldest -> newest
     changed = False
     for item in slice_items:
         try:
@@ -205,7 +207,7 @@ def predict_from_history(gp_list):
         if s2 <= 0: return None,0
         probG/=s2; probP/=s2
         pred = 'G' if probG > probP else 'P'
-        conf = int(round(max(probG, probP)*100))
+        conf = int(round(max(probG,probP)*100))
         return pred, conf
     g = gp_list.count('G'); p = gp_list.count('P')
     if g + p == 0: return None,0
