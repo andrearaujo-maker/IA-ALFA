@@ -1,4 +1,3 @@
-<!-- templates/painel.html -->
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -69,6 +68,7 @@ async function refresh(){
   try {
     const r = await fetch('/predicao');
     const j = await r.json();
+
     const pred = j.prediction;
     const conf = j.confidence;
     const next_issue = j.next_issue;
@@ -90,7 +90,10 @@ async function refresh(){
       signalEl.style.color = '#9fd8ff';
       signalEl.style.textShadow = '';
     }
-    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf !== null ? conf + '%' : '-');
+
+    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf !== null ? conf + '%' : '-')
+      + ' • Acurácia: ' + (st.accuracy !== undefined ? st.accuracy + '%' : (st.accuracy || '-'));
+
     document.getElementById('period').innerText = 'Próximo Período: ' + (next_issue || '-');
 
     // Balls
@@ -115,8 +118,7 @@ async function refresh(){
       const right = document.createElement('div');
       const status = s.evaluated ? (s.correct ? '✅' : '❌') : '⏳';
       right.innerHTML = `${status} <span style="color:#9fbfd6"> ${new Date((s.ts||0)*1000).toLocaleTimeString()}</span>`;
-      div.appendChild(left);
-      div.appendChild(right);
+      div.appendChild(left); div.appendChild(right);
       histlist.appendChild(div);
     });
 
