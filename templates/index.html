@@ -1,53 +1,64 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Painel IA WinGo (POPBRA)</title>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Painel IA WinGo</title>
 <style>
-:root{--accent:#00e8ff;--orange:#ff9a2e;--bg1:#001021;--bg2:#000814}
-body{margin:0;font-family:Segoe UI,Roboto,Arial;background:radial-gradient(circle at 10% 10%, #001a33 0%, #000811 40%, #000 100%);color:#cfeefc;display:flex;align-items:start;justify-content:center;padding:28px}
-.wrapper{width:720px;max-width:96%}
-.card{background:linear-gradient(180deg, rgba(6,14,28,0.95), rgba(3,6,15,0.95));padding:22px;border-radius:14px;border:1px solid rgba(0,160,255,0.06);box-shadow:0 30px 60px rgba(0,120,255,0.06)}
-.header{display:flex;gap:12px;align-items:center}
-.logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(90deg,#002033,#001320);display:flex;align-items:center;justify-content:center;font-size:28px}
-.title{color:var(--accent);font-size:20px;margin:0}
-.sub{color:#9fd8ff;margin-top:4px}
-.panel{margin-top:18px;background:rgba(0,0,0,0.18);padding:18px;border-radius:12px;border:1px solid rgba(0,160,255,0.04)}
-.signal{font-size:34px;font-weight:700;color:var(--accent);text-shadow:0 0 18px rgba(0,160,255,0.18);display:flex;align-items:center;gap:12px;justify-content:center;padding:6px}
-.conf{color:#9fd8ff;text-align:center;margin-top:6px}
+:root{
+  --accent:#00e8ff;
+  --neon:#00f0ff;
+  --orange:#ff9a2e;
+  --bg:#001021;
+  --card:#071226;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Roboto,Arial;background:radial-gradient(circle at 10% 10%, #001a33 0%, #000811 40%, #000 100%);color:#cfeefc;display:flex;align-items:flex-start;justify-content:center;padding:28px}
+.container{width:760px;max-width:96%}
+.card{background:linear-gradient(180deg, rgba(6,14,28,0.95), rgba(3,6,15,0.95));padding:28px;border-radius:18px;border:1px solid rgba(0,160,255,0.06);box-shadow:0 30px 60px rgba(0,120,255,0.06)}
+.header{display:flex;align-items:center;gap:12px}
+.logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(90deg,#002033,#001320);display:flex;align-items:center;justify-content:center;font-size:30px}
+.title{color:var(--neon);font-size:28px;font-weight:700}
+.sub{color:#9fd8ff;margin-top:4px;font-size:14px}
+.panel{margin-top:18px;background:rgba(0,0,0,0.18);padding:22px;border-radius:14px;border:1px solid rgba(0,160,255,0.04)}
+.signal{font-size:46px;font-weight:800;color:var(--neon);text-shadow:0 0 28px rgba(0,200,255,0.18);display:flex;align-items:center;gap:12px;justify-content:center;padding:6px}
+.conf{color:#9fd8ff;text-align:center;margin-top:8px;font-weight:600}
 .period{margin-top:10px;text-align:center;color:#80ffff;font-size:18px}
-.results{margin-top:16px;background:rgba(0,0,0,0.18);padding:14px;border-radius:10px}
-.bola{display:inline-block;width:34px;height:34px;line-height:34px;border-radius:50%;text-align:center;margin:6px;font-weight:700}
-.G{background:#ff7f00;color:#001}
-.P{background:#00bfff;color:#001}
-.history{margin-top:16px;background:rgba(0,0,0,0.12);padding:12px;border-radius:10px}
+.results{margin-top:20px;background:rgba(0,0,0,0.18);padding:16px;border-radius:12px}
+.bolas{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding-top:6px}
+.bola{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,0.25)}
+.G{background:linear-gradient(180deg,#ff9a2e,#ff7f00);color:#001}
+.P{background:linear-gradient(180deg,#66f0ff,#00bfff);color:#001}
+.history{margin-top:18px;background:rgba(0,0,0,0.12);padding:12px;border-radius:12px}
+.history-item{padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center}
+.history-index{color:#9fd8ff;margin-right:10px;font-weight:700}
 .small{font-size:13px;color:#9fbfd6}
 .footer{margin-top:14px;color:#82c6ea;text-align:center}
 </style>
 </head>
 <body>
-  <div class="wrapper">
+  <div class="container">
     <div class="card">
       <div class="header">
         <div class="logo">🤖</div>
         <div>
-          <div class="title">Painel IA WinGo (POPBRA)</div>
-          <div class="sub small">IA probabilística adaptativa + Perceptron online — atualiza a cada 5s</div>
+          <div class="title">Painel IA WinGo</div>
+          <div class="sub small">Previsão automática por padrões — atualiza a cada 5s</div>
         </div>
       </div>
 
-      <div class="panel" id="panel">
+      <div class="panel">
         <div style="text-align:center">
-          <div style="font-weight:bold">🧠 Próximo Sinal Automático</div>
-          <div class="signal" id="signal">Carregando...</div>
-          <div class="conf" id="conf">Confiança: -</div>
-          <div class="period" id="period">Próximo Período: -</div>
-          <div class="conf" id="stats">Acertos: 0 / 0 — Acurácia: 0%</div>
+          <div style="font-weight:bold;margin-bottom:8px">🧠 Próximo Sinal Automático</div>
+          <div id="signal" class="signal">Carregando...</div>
+          <div id="conf" class="conf">Confiança IA: -</div>
+          <div id="period" class="period">Próximo Período: -</div>
         </div>
       </div>
 
       <div class="results" id="results">
         <h3>Últimos Resultados (API)</h3>
-        <div id="balls"></div>
+        <div id="balls" class="bolas"></div>
       </div>
 
       <div class="history" id="history">
@@ -64,49 +75,66 @@ async function refresh(){
   try {
     const r = await fetch('/predicao');
     const j = await r.json();
+
     const pred = j.prediction;
     const conf = j.confidence;
     const next_issue = j.next_issue;
-    const last_results = j.last_results;
-    const hist = j.signals;
-    const st = j.stats;
+    const last_results = j.last_results || [];
+    const hist = j.signals || [];
+    const st = j.stats || {correct:0, total:0, accuracy:0};
 
     const signalEl = document.getElementById('signal');
     if(pred === 'G') {
       signalEl.innerText = '🟠 Grande';
-      signalEl.style.color = '#ffb16a'; signalEl.style.textShadow='0 0 22px rgba(255,140,30,0.25)';
+      signalEl.style.color = '#ffcf9a';
+      signalEl.style.textShadow = '0 0 28px rgba(255,140,30,0.22)';
     } else if(pred === 'P') {
       signalEl.innerText = '🔵 Pequeno';
-      signalEl.style.color = '#66f0ff'; signalEl.style.textShadow='0 0 22px rgba(0,200,255,0.18)';
+      signalEl.style.color = '#66f0ff';
+      signalEl.style.textShadow = '0 0 28px rgba(0,200,255,0.18)';
     } else {
-      signalEl.innerText = '-'; signalEl.style.color='#9fd8ff';
+      signalEl.innerText = 'Carregando...';
+      signalEl.style.color = '#9fd8ff';
+      signalEl.style.textShadow = '';
     }
-    document.getElementById('conf').innerText = 'Confiança: ' + (conf !== null ? conf+'%' : '-');
+    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf !== null ? conf + '%' : '-');
     document.getElementById('period').innerText = 'Próximo Período: ' + (next_issue || '-');
-    document.getElementById('stats').innerText = 'Acertos: ' + st.correct + ' / ' + st.total + ' — Acurácia: ' + st.accuracy + '%';
 
+    // Balls
     const balls = document.getElementById('balls');
     balls.innerHTML = '';
-    last_results.forEach(x=>{
-      const sp = document.createElement('span'); sp.className='bola '+x; sp.innerText = x;
+    (last_results || []).forEach(x=>{
+      const sp = document.createElement('div');
+      sp.className = 'bola ' + (x === 'G' ? 'G' : 'P');
+      sp.innerText = (x === 'G' ? 'G' : 'P');
       balls.appendChild(sp);
     });
 
+    // History list - recente -> antigo (numerado)
     const histlist = document.getElementById('histlist');
     histlist.innerHTML = '';
-    (hist || []).slice().reverse().forEach(s=>{
+    // mostra os últimos 10 sinais (mais recentes primeiro)
+    const display = (hist || []).slice(-10).reverse();
+    display.forEach((s, idx)=>{
       const div = document.createElement('div');
+      div.className = 'history-item';
+      const left = document.createElement('div');
+      left.innerHTML = `<span class="history-index">${idx+1}.</span> ${s.next_issue || '-'} → ${s.prediction || '-'} (${s.confidence || '-'}%)`;
+      const right = document.createElement('div');
       const status = s.evaluated ? (s.correct ? '✅' : '❌') : '⏳';
-      div.innerHTML = `<b>${s.prediction || '-'} → ${s.actual || '-'}</b> ${status} <span style="color:#9fbfd6"> ${new Date((s.ts||0)*1000).toLocaleTimeString()}</span>`;
+      right.innerHTML = `${status} <span style="color:#9fbfd6"> ${new Date((s.ts||0)*1000).toLocaleTimeString()}</span>`;
+      div.appendChild(left);
+      div.appendChild(right);
       histlist.appendChild(div);
     });
 
   } catch(e){
-    console.error(e);
+    console.error("refresh error:", e);
   }
 }
+
 setInterval(refresh, 5000);
-refresh();
+window.onload = refresh;
 </script>
 </body>
 </html>
