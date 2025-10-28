@@ -1,0 +1,23 @@
+
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Painel IA WinGo</title>
+<style>
+:root{--neon:#00e8ff;--orange:#ff9a2e}body{margin:0;font-family:Segoe UI,Roboto,Arial;background:radial-gradient(circle at 10% 10%, #001a33, #000811);color:#cfeefc;display:flex;justify-content:center;padding:28px} .container{width:760px;max-width:96%}.card{background:linear-gradient(180deg, rgba(6,14,28,0.95), rgba(3,6,15,0.95));padding:28px;border-radius:18px} .title{color:var(--neon);font-size:28px;font-weight:700} .panel{margin-top:18px;background:rgba(0,0,0,0.18);padding:22px;border-radius:14px} .signal{font-size:46px;font-weight:800;color:var(--neon);text-shadow:0 0 28px rgba(0,200,255,0.18);text-align:center} .conf{color:#9fd8ff;text-align:center;margin-top:8px} .period{margin-top:10px;text-align:center;color:#80ffff;font-size:18px} .bolas{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding-top:6px} .bola{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700} .G{background:linear-gradient(180deg,#ff9a2e,#ff7f00);color:#001}.P{background:linear-gradient(180deg,#66f0ff,#00bfff);color:#001} .history{margin-top:18px;background:rgba(0,0,0,0.12);padding:12px;border-radius:12px} .history-item{padding:6px 0;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="container"><div class="card">
+<div class="title">Painel IA WinGo</div><div class="panel"><div style="text-align:center"><div>🧠 Próximo Sinal Automático</div><div id="signal" class="signal">Carregando...</div><div id="conf" class="conf">Confiança IA: -</div><div id="period" class="period">Próximo Período: -</div></div></div>
+<div class="panel"><h3>Últimos Resultados (API)</h3><div id="balls" class="bolas"></div></div>
+<div class="history"><h3>Histórico de Sinais (recente → antigo)</h3><div id="histlist"></div></div>
+<div style="text-align:center;color:#82c6ea;margin-top:12px">Observação: se a API mudar de campo, ajuste o script. Atualizações automáticas: 5s</div>
+</div></div>
+<script>
+async function refresh(){try{const r=await fetch('/predicao');const j=await r.json();const pred=j.prediction;const conf=j.confidence;const next_issue=j.next_issue;const last_results=j.last_results||[];const hist=j.signals||[];const st=j.stats||{correct:0,total:0,accuracy:0};
+const signalEl=document.getElementById('signal');
+if(pred==='G'){signalEl.innerText='🟠 Grande';signalEl.style.color='#ffcf9a';}else if(pred==='P'){signalEl.innerText='🔵 Pequeno';signalEl.style.color='#66f0ff';}else{signalEl.innerText='Carregando...';signalEl.style.color='#9fd8ff';}
+document.getElementById('conf').innerText='Confiança IA: '+(conf!==null?conf+'%':'-');
+document.getElementById('period').innerText='Próximo Período: '+(next_issue||'-');
+const balls=document.getElementById('balls');balls.innerHTML='';last_results.forEach(x=>{const d=document.createElement('div');d.className='bola '+(x==='G'?'G':'P');d.innerText=(x==='G'?'G':'P');balls.appendChild(d);});
+const histlist=document.getElementById('histlist');histlist.innerHTML='';const display=(hist||[]).slice(-10).reverse();display.forEach((s,idx)=>{const div=document.createElement('div');div.className='history-item';div.innerHTML=`<div>${idx+1}. ${s.next_issue||'-'} → ${s.prediction||'-'} (${s.confidence||'-'}%)</div><div>${s.evaluated?(s.correct?'✅':'❌'):'⏳'} <span style="color:#9fbfd6">${new Date((s.ts||0)*1000).toLocaleTimeString()}</span></div>`;histlist.appendChild(div);});}catch(e){console.error(e);}}
+setInterval(refresh,5000);window.onload=refresh;
+</script>
+</body></html>
