@@ -1,7 +1,6 @@
-
 services:
   - type: web
-    name: painel-wingo
+    name: painel-wingo-popbra
     env: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python app.py"

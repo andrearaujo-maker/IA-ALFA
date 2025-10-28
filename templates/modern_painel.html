@@ -1,0 +1,92 @@
+
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Painel IA WinGo</title>
+  <style>
+    :root{--neon:#00e8ff;--orange:#ff9a2e;--dark:#041024}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#001826,#001018);color:#cfeefc;display:flex;justify-content:center;padding:28px}
+    .wrap{width:820px;max-width:96%}
+    .card{background:linear-gradient(180deg,rgba(4,18,32,0.95),rgba(4,10,18,0.92));border-radius:22px;padding:26px;border:1px solid rgba(0,200,255,0.06);box-shadow:0 8px 36px rgba(0,0,0,0.6)}
+    .header{display:flex;align-items:center;gap:12px}
+    .logo{width:54px;height:54px;border-radius:10px;background:linear-gradient(180deg,#00334d,#002233);display:flex;align-items:center;justify-content:center;font-size:28px}
+    .title{color:var(--neon);font-weight:800;font-size:28px}
+    .panel{margin-top:14px;background:rgba(0,0,0,0.18);padding:20px;border-radius:14px}
+    .signal{font-size:48px;font-weight:800;color:var(--neon);text-align:center;text-shadow:0 0 28px rgba(0,200,255,0.12)}
+    .sub{color:#9fd8ff;text-align:center;margin-top:6px}
+    .period{margin-top:8px;text-align:center;color:#80ffff;font-size:18px}
+    .row{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:14px}
+    .bolas{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding-top:6px}
+    .bola{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+    .G{background:linear-gradient(180deg,#ff9a2e,#ff7f00);color:#001} .P{background:linear-gradient(180deg,#66f0ff,#00bfff);color:#001}
+    .history{margin-top:16px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06));padding:12px;border-radius:12px}
+    .history-item{padding:8px 0;display:flex;justify-content:space-between;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    .note{color:#74cfe8;text-align:center;margin-top:12px;font-size:13px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="header">
+      <div class="logo">🤖</div>
+      <div class="title">Painel IA WinGo</div>
+    </div>
+
+    <div class="panel">
+      <div style="text-align:center">
+        <div style="font-size:16px;color:#9fd8ff">🧠 Próximo Sinal Automático</div>
+        <div id="signal" class="signal">Carregando...</div>
+        <div id="conf" class="sub">Confiança IA: -</div>
+        <div id="period" class="period">Próximo Período: -</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h3 style="margin:0 0 6px 0">Últimos Resultados (API)</h3>
+      <div id="balls" class="bolas"></div>
+    </div>
+
+    <div class="history">
+      <h3 style="margin:0 0 8px 0">Histórico de Sinais (recente → antigo)</h3>
+      <div id="histlist"></div>
+    </div>
+
+    <div class="note">Observação: se a API mudar de campo, ajuste o script. Atualizações automáticas: 30s</div>
+  </div>
+</div>
+
+<script>
+async function refreshPanel(){
+  try{
+    const r = await fetch('/data');
+    const j = await r.json();
+    const pred = j.prediction; const conf = j.confidence; const next_issue = j.next_issue;
+    const last_results = j.last_results || []; const signals = j.signals || []; const stats = j.stats || {};
+    const signalEl = document.getElementById('signal');
+    if(pred==='G'){ signalEl.innerText = '🔴 Grande'; signalEl.style.color = '#ffcf9a'; }
+    else if(pred==='P'){ signalEl.innerText = '🔵 Pequeno'; signalEl.style.color = '#66f0ff'; }
+    else { signalEl.innerText = 'Carregando...'; signalEl.style.color = '#9fd8ff'; }
+    document.getElementById('conf').innerText = 'Confiança IA: ' + (conf!==null? conf + '%':'-');
+    document.getElementById('period').innerText = 'Próximo Período: ' + (next_issue || '-');
+    const balls = document.getElementById('balls'); balls.innerHTML='';
+    last_results.forEach(x=>{ const d = document.createElement('div'); d.className = 'bola ' + (x==='G'?'G':'P'); d.innerText = (x==='G'?'G':'P'); balls.appendChild(d); });
+    const histlist = document.getElementById('histlist'); histlist.innerHTML='';
+    const display = (signals || []).slice(0,10);
+    for(let i=0;i<display.length;i++){
+      const s = display[i];
+      const div = document.createElement('div'); div.className='history-item';
+      const left = document.createElement('div'); left.innerText = (i+1) + '. ' + (s.next_issue || '-') + ' → ' + (s.prediction || '-');
+      const right = document.createElement('div'); right.innerHTML = (s.evaluated ? (s.correct ? '✅' : '❌') : '⏳') + ' <small style="color:#9fbfd6"> ' + (new Date((s.ts||0)*1000).toLocaleTimeString()) + '</small>';
+      div.appendChild(left); div.appendChild(right); histlist.appendChild(div);
+    }
+  }catch(e){ console.error('refresh error', e); }
+}
+
+setInterval(refreshPanel, 30000);
+window.addEventListener('load', refreshPanel);
+</script>
+</body>
+</html>
