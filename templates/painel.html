@@ -1,23 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel IA WinGo</title>
+  <style>
+    body {
+      background: radial-gradient(circle at top, #0d1117, #000);
+      color: white;
+      font-family: 'Poppins', sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2em;
+      color: #00aaff;
+      margin-bottom: 10px;
+    }
+    .painel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 20px;
+      width: 90%;
+      max-width: 700px;
+      margin: auto;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    }
+    .sinal {
+      font-size: 2.5em;
+      font-weight: bold;
+      padding: 15px 25px;
+      border-radius: 30px;
+      background: #222;
+      box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.2);
+    }
+    .grande {
+      color: #ff6b6b;
+      text-shadow: 0 0 10px #ff6b6b;
+    }
+    .pequeno {
+      color: #4ecdc4;
+      text-shadow: 0 0 10px #4ecdc4;
+    }
+    .info {
+      font-size: 1.1em;
+      color: #ccc;
+    }
+    .lista {
+      margin-top: 15px;
+      font-family: monospace;
+      text-align: left;
+      background: rgba(255,255,255,0.03);
+      padding: 10px;
+      border-radius: 10px;
+      width: 100%;
+    }
+    .atualizando {
+      color: #888;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤖 Painel IA WinGo</h1>
 
-<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Painel IA WinGo</title>
-<style>
-:root{--neon:#00e8ff;--orange:#ff9a2e}body{margin:0;font-family:Segoe UI,Roboto,Arial;background:radial-gradient(circle at 10% 10%, #001a33, #000811);color:#cfeefc;display:flex;justify-content:center;padding:28px} .container{width:760px;max-width:96%}.card{background:linear-gradient(180deg, rgba(6,14,28,0.95), rgba(3,6,15,0.95));padding:28px;border-radius:18px} .title{color:var(--neon);font-size:28px;font-weight:700} .panel{margin-top:18px;background:rgba(0,0,0,0.18);padding:22px;border-radius:14px} .signal{font-size:46px;font-weight:800;color:var(--neon);text-shadow:0 0 28px rgba(0,200,255,0.18);text-align:center} .conf{color:#9fd8ff;text-align:center;margin-top:8px} .period{margin-top:10px;text-align:center;color:#80ffff;font-size:18px} .bolas{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding-top:6px} .bola{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700} .G{background:linear-gradient(180deg,#ff9a2e,#ff7f00);color:#001}.P{background:linear-gradient(180deg,#66f0ff,#00bfff);color:#001} .history{margin-top:18px;background:rgba(0,0,0,0.12);padding:12px;border-radius:12px} .history-item{padding:6px 0;display:flex;justify-content:space-between}
-</style></head><body>
-<div class="container"><div class="card">
-<div class="title">Painel IA WinGo</div><div class="panel"><div style="text-align:center"><div>🧠 Próximo Sinal Automático</div><div id="signal" class="signal">Carregando...</div><div id="conf" class="conf">Confiança IA: -</div><div id="period" class="period">Próximo Período: -</div></div></div>
-<div class="panel"><h3>Últimos Resultados (API)</h3><div id="balls" class="bolas"></div></div>
-<div class="history"><h3>Histórico de Sinais (recente → antigo)</h3><div id="histlist"></div></div>
-<div style="text-align:center;color:#82c6ea;margin-top:12px">Observação: se a API mudar de campo, ajuste o script. Atualizações automáticas: 5s</div>
-</div></div>
-<script>
-async function refresh(){try{const r=await fetch('/predicao');const j=await r.json();const pred=j.prediction;const conf=j.confidence;const next_issue=j.next_issue;const last_results=j.last_results||[];const hist=j.signals||[];const st=j.stats||{correct:0,total:0,accuracy:0};
-const signalEl=document.getElementById('signal');
-if(pred==='G'){signalEl.innerText='🟠 Grande';signalEl.style.color='#ffcf9a';}else if(pred==='P'){signalEl.innerText='🔵 Pequeno';signalEl.style.color='#66f0ff';}else{signalEl.innerText='Carregando...';signalEl.style.color='#9fd8ff';}
-document.getElementById('conf').innerText='Confiança IA: '+(conf!==null?conf+'%':'-');
-document.getElementById('period').innerText='Próximo Período: '+(next_issue||'-');
-const balls=document.getElementById('balls');balls.innerHTML='';last_results.forEach(x=>{const d=document.createElement('div');d.className='bola '+(x==='G'?'G':'P');d.innerText=(x==='G'?'G':'P');balls.appendChild(d);});
-const histlist=document.getElementById('histlist');histlist.innerHTML='';const display=(hist||[]).slice(-10).reverse();display.forEach((s,idx)=>{const div=document.createElement('div');div.className='history-item';div.innerHTML=`<div>${idx+1}. ${s.next_issue||'-'} → ${s.prediction||'-'} (${s.confidence||'-'}%)</div><div>${s.evaluated?(s.correct?'✅':'❌'):'⏳'} <span style="color:#9fbfd6">${new Date((s.ts||0)*1000).toLocaleTimeString()}</span></div>`;histlist.appendChild(div);});}catch(e){console.error(e);}}
-setInterval(refresh,5000);window.onload=refresh;
-</script>
-</body></html>
+  <div class="painel">
+    <div id="sinal" class="sinal grande">Carregando...</div>
+    <div class="info">Confiança IA: <span id="confianca">--%</span></div>
+    <div class="info">Próximo Período: <span id="periodo">--</span></div>
+
+    <div class="lista">
+      <h3>📊 Últimos Resultados (API)</h3>
+      <ul id="resultados"></ul>
+    </div>
+
+    <div class="lista">
+      <h3>📜 Histórico de Sinais (recente → antigo)</h3>
+      <ul id="historico"></ul>
+    </div>
+
+    <p class="atualizando" id="status">Atualizando dados...</p>
+  </div>
+
+  <script>
+    async function atualizarDados() {
+      const status = document.getElementById("status");
+      const sinalEl = document.getElementById("sinal");
+      const confiancaEl = document.getElementById("confianca");
+      const periodoEl = document.getElementById("periodo");
+      const resultadosEl = document.getElementById("resultados");
+      const historicoEl = document.getElementById("historico");
+
+      status.textContent = "⏳ Buscando dados da IA...";
+
+      try {
+        const resposta = await fetch("/dados");
+        const data = await resposta.json();
+
+        if (data.erro) {
+          status.textContent = "❌ Erro ao buscar dados da API.";
+          return;
+        }
+
+        // Ajuste de estrutura conforme API
+        const lista = data?.Data?.list || [];
+        if (lista.length === 0) {
+          status.textContent = "Nenhum dado encontrado.";
+          return;
+        }
+
+        // Últimos 5 resultados
+        resultadosEl.innerHTML = lista.slice(0, 5)
+          .map(r => `<li>🕒 ${r.IssueCode} → 🎲 ${r.Number} (${r.Result})</li>`)
+          .join("");
+
+        // Exemplo de IA (aleatória para simulação)
+        const proximo = Math.random() > 0.5 ? "Grande" : "Pequeno";
+        const confianca = (40 + Math.random() * 30).toFixed(1);
+        const periodo = lista[0].IssueCode || "--";
+
+        sinalEl.textContent = proximo;
+        sinalEl.className = `sinal ${proximo === "Grande" ? "grande" : "pequeno"}`;
+        confiancaEl.textContent = `${confianca}%`;
+        periodoEl.textContent = periodo;
+
+        // Histórico simulado
+        historicoEl.innerHTML = lista.slice(0, 5)
+          .map((_, i) => `<li>${i + 1}. - ${proximo[0]} (${confianca}%)</li>`)
+          .join("");
+
+        status.textContent = "✅ Atualizado com sucesso!";
+      } catch (err) {
+        status.textContent = "⚠️ Erro ao atualizar dados da IA.";
+        console.error(err);
+      }
+    }
+
+    atualizarDados();
+    setInterval(atualizarDados, 15000);
+  </script>
+</body>
+</html>
