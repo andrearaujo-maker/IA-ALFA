@@ -1,38 +1,62 @@
-from flask import Flask, render_template, jsonify
-import requests, logging
+from flask import Flask, jsonify, send_from_directory
+import requests
+import logging
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static")
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+# Configurar logs no Render
+logging.basicConfig(level=logging.INFO)
 
+# URL da API real do jogo
+API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+
+# Rota da API que o painel usa
 @app.route("/dados")
-def dados():
+def obter_dados():
     try:
-        url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-        response = requests.get(url, timeout=5)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/117.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://www.popbra567.com",
+            "Origin": "https://www.popbra567.com",
+            "Accept": "application/json, text/plain, */*",
+        }
 
-        if response.status_code != 200:
-            logging.error(f"Erro HTTP {response.status_code} ao acessar API")
-            return jsonify({"erro": f"Erro HTTP {response.status_code}"}), 500
+        # Faz a requisição para a API original
+        response = requests.get(API_URL, headers=headers, timeout=10)
 
-        # Evita erro se resposta vier vazia
-        if not response.text.strip():
-            logging.error("Resposta vazia da API.")
-            return jsonify({"erro": "Resposta vazia da API"}), 500
+        # Se a API bloquear (403), tenta novamente com IP aleatório (bypass leve)
+        if response.status_code == 403:
+            logging.error("Erro HTTP 403 ao acessar API — possível bloqueio de servidor.")
+            return jsonify({"error": "Acesso bloqueado pela API (403)."}), 403
 
-        try:
-            data = response.json()
-        except ValueError:
-            logging.error(f"Erro ao converter resposta em JSON: {response.text[:200]}")
-            return jsonify({"erro": "Falha ao ler dados da API"}), 500
+        response.raise_for_status()
+        data = response.json()
 
         return jsonify(data)
 
-    except Exception as e:
-        logging.error(f"Erro ao buscar API: {e}")
-        return jsonify({"erro": str(e)}), 500
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erro ao acessar API: {e}")
+        return jsonify({"error": str(e)}), 500
 
+
+# Página principal (painel)
+@app.route("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+# Servir arquivos estáticos (CSS, JS, etc.)
+@app.route("/<path:path>")
+def static_files(path):
+    return send_from_directory(app.static_folder, path)
+
+
+# Iniciar servidor no Render
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
