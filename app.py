@@ -1,28 +1,7 @@
 from flask import Flask, render_template, jsonify
-import requests
-import logging
-from datetime import datetime
+import requests, logging
 
 app = Flask(__name__)
-
-# Configuração do log
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# URL da API via proxy (evita bloqueio CORS no Render)
-API_URL = "https://api.allorigins.win/raw?url=https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-
-# Função para buscar resultados
-def buscar_resultados():
-    try:
-        logging.info("🔍 Buscando resultados da API via proxy...")
-        resposta = requests.get(API_URL, timeout=10)
-        resposta.raise_for_status()
-        dados = resposta.json()
-        logging.info("✅ Resultados recebidos com sucesso.")
-        return dados
-    except Exception as e:
-        logging.error(f"Erro ao buscar API: {e}")
-        return None
 
 @app.route("/")
 def index():
@@ -30,10 +9,32 @@ def index():
 
 @app.route("/dados")
 def dados():
-    resultados = buscar_resultados()
-    if resultados:
-        return jsonify(resultados)
-    return jsonify({"erro": "Falha ao buscar dados da API"}), 500
+    try:
+        url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        response = requests.get(url, timeout=5)
 
+        if response.status_code != 200:
+            logging.error(f"Erro HTTP {response.status_code} ao acessar API")
+            return jsonify({"erro": f"Erro HTTP {response.status_code}"}), 500
+
+        # Evita erro se resposta vier vazia
+        if not response.text.strip():
+            logging.error("Resposta vazia da API.")
+            return jsonify({"erro": "Resposta vazia da API"}), 500
+
+        try:
+            data = response.json()
+        except ValueError:
+            logging.error(f"Erro ao converter resposta em JSON: {response.text[:200]}")
+            return jsonify({"erro": "Falha ao ler dados da API"}), 500
+
+        return jsonify(data)
+
+    except Exception as e:
+        logging.error(f"Erro ao buscar API: {e}")
+        return jsonify({"erro": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
