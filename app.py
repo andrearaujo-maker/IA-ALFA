@@ -3,7 +3,7 @@ import requests
 import random
 import logging
 
-app = Flask(name)
+app = Flask(__name__)
 
 # 🔗 API do Wingo
 API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
