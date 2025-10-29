@@ -1,62 +1,56 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, render_template
 import requests
+import random
 import logging
-import os
 
-app = Flask(__name__, static_folder="static")
+app = Flask(name)
 
-# Configurar logs no Render
-logging.basicConfig(level=logging.INFO)
-
-# URL da API real do jogo
+# 🔗 API do Wingo
 API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
 
-# Rota da API que o painel usa
+# 🌎 Lista de proxies gratuitos brasileiros (rotativos)
+PROXIES_BR = [
+    "http://177.93.45.156:999",
+    "http://201.91.82.155:3128",
+    "http://177.234.245.243:999",
+    "http://170.81.78.32:8080",
+    "http://187.49.191.61:999"
+]
+
+# 🚀 Função para buscar dados com fallback de proxy
+def get_api_data():
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+
+    for attempt in range(3):  # tenta até 3 vezes
+        proxy = random.choice(PROXIES_BR)
+        try:
+            response = requests.get(API_URL, headers=headers, proxies={"http": proxy, "https": proxy}, timeout=10)
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logging.error(f"Erro HTTP {response.status_code} com proxy {proxy}")
+        except Exception as e:
+            logging.error(f"Tentativa {attempt+1} falhou com proxy {proxy}: {e}")
+    return None
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
 @app.route("/dados")
-def obter_dados():
+def dados():
     try:
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/117.0.0.0 Safari/537.36"
-            ),
-            "Referer": "https://www.popbra567.com",
-            "Origin": "https://www.popbra567.com",
-            "Accept": "application/json, text/plain, */*",
-        }
-
-        # Faz a requisição para a API original
-        response = requests.get(API_URL, headers=headers, timeout=10)
-
-        # Se a API bloquear (403), tenta novamente com IP aleatório (bypass leve)
-        if response.status_code == 403:
-            logging.error("Erro HTTP 403 ao acessar API — possível bloqueio de servidor.")
-            return jsonify({"error": "Acesso bloqueado pela API (403)."}), 403
-
-        response.raise_for_status()
-        data = response.json()
-
-        return jsonify(data)
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Erro ao acessar API: {e}")
+        data = get_api_data()
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "Não foi possível obter dados da API"}), 500
+    except Exception as e:
+        logging.error(f"Erro ao buscar API: {e}")
         return jsonify({"error": str(e)}), 500
 
-
-# Página principal (painel)
-@app.route("/")
-def index():
-    return send_from_directory(app.static_folder, "index.html")
-
-
-# Servir arquivos estáticos (CSS, JS, etc.)
-@app.route("/<path:path>")
-def static_files(path):
-    return send_from_directory(app.static_folder, path)
-
-
-# Iniciar servidor no Render
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+if name == "main":
+    app.run(host="0.0.0.0", port=5000)
