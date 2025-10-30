@@ -1,7 +1,1 @@
-services:
-  - type: web
-    name: painel-wingo-popbra
-    env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python app.py"
-    plan: free
+web: gunicorn app:app --bind 0.0.0.0:$PORT
