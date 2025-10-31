@@ -1,40 +1,104 @@
-# bot_ia_popbra.py
-# Bot Telegram individual com IA probabilística adaptativa (simulação por padrão)
-# Requisitos: requests
-# Rodar: python bot_ia_popbra.py
-
+import telebot
 import requests
-import threading
 import time
 import json
-import os
-from collections import defaultdict, Counter
+import threading
 
-# ---------------- CONFIG ----------------
-TELEGRAM_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"  # seu token (guarde seguro)
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-USE_REAL_API = True   # False = usa dados simulados; True = buscar a API real (cuidado com CORS/limites)
-API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-FETCH_INTERVAL = 5     # segundos
-LOOKBACK_MAX = 200
-ANALYZE_WINDOW_SIZES = [3,4,5,6]
-PERSIST_FILE = "aprendizado_bot.json"
-# ----------------------------------------
+# 🔹 Token do seu bot
+BOT_TOKEN = "COLOQUE_AQUI_SEU_TOKEN"
 
-# Estado em memória
-numeric_history = []   # lista de ints (oldest->newest)
-gp_history = []        # list of 'G'/'P'
-last_issue = None
-signals = []           # lista de dicts de sinais gerados (opcional)
-subscribers = {}       # chat_id -> {last_sent: 'G'/'P' or None}
-stats = {"total":0, "correct":0, "accuracy":0.0}
+# 🔹 Lista de códigos válidos
+CODIGOS_VALIDOS = ["IA-ALFA-001", "IA-ALFA-002", "IA-ALFA-003", "IA-ALFA-004", "IA-ALFA-005"]
 
-# Persistence helpers
-def load_state():
-    global subscribers, signals, stats
-    if os.path.exists(PERSIST_FILE):
-        try:
-            with open(PERSIST_FILE, "r", encoding="utf-8") as f:
+# 🔹 Dicionário para armazenar usuários ativos
+usuarios_ativos = {}
+
+# 🔹 Função para pegar últimos resultados
+def obter_resultados():
+    try:
+        url = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+        response = requests.get(url)
+        data = response.json()
+        return data["data"]["list"]
+    except Exception as e:
+        print("Erro ao obter resultados:", e)
+        return []
+
+# 🔹 Função de previsão simples (exemplo)
+def prever_sinal(dados):
+    ultimos = [int(x["number"]) for x in dados[:5]]
+    soma = sum(ultimos)
+    if soma % 2 == 0:
+        return "🔴 Grande"
+    else:
+        return "🔵 Pequeno"
+
+# 🔹 Bot principal
+bot = telebot.TeleBot(BOT_TOKEN)
+
+@bot.message_handler(commands=["start"])
+def start(msg):
+    texto = (
+        "👋 Olá! Envie seu código de acesso com:\n\n"
+        "`/redeem <CÓDIGO>`\n"
+        "Exemplo: `/redeem IA-ALFA-001`\n\n"
+        "Assim você será incluído para receber sinais automáticos."
+    )
+    bot.reply_to(msg, texto, parse_mode="Markdown")
+
+@bot.message_handler(commands=["redeem"])
+def redeem(msg):
+    try:
+        codigo = msg.text.split(" ")[1].strip()
+    except:
+        bot.reply_to(msg, "❌ Formato incorreto. Use `/redeem IA-ALFA-001`", parse_mode="Markdown")
+        return
+
+    if codigo in CODIGOS_VALIDOS:
+        usuarios_ativos[msg.chat.id] = codigo
+        bot.reply_to(msg, "✅ Código aceito! Você será incluído na lista para receber sinais automáticos.")
+    else:
+        bot.reply_to(msg, "❌ Código inválido ou expirado.")
+
+# 🔹 Função de envio automático
+def enviar_sinais():
+    ultimo_id = None
+    while True:
+        dados = obter_resultados()
+        if not dados:
+            time.sleep(10)
+            continue
+
+        atual = dados[0]["issueNumber"]
+
+        if atual != ultimo_id:
+            ultimo_id = atual
+            previsao = prever_sinal(dados)
+            prox = str(int(atual) + 1)
+            msg = (
+                "🎯 *BOT SINAIS IA ALFA*\n\n"
+                f"📊 Último Resultado: `{dados[0]['number']}`\n"
+                f"🕒 Próximo Período: `{prox}`\n"
+                f"💡 Próximo Sinal: {previsao}\n\n"
+                "🚀 IA 2025 - Previsão Automática"
+            )
+
+            for user in list(usuarios_ativos.keys()):
+                try:
+                    bot.send_message(user, msg, parse_mode="Markdown")
+                except:
+                    pass
+
+            print("Sinal enviado:", previsao)
+
+        time.sleep(20)
+
+# 🔹 Thread paralela para envio de sinais
+threading.Thread(target=enviar_sinais, daemon=True).start()
+
+# 🔹 Loop do bot
+print("✅ BOT SINAIS IA ALFA iniciado com sucesso!")
+bot.polling(non_stop=True)            with open(PERSIST_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             subscribers = {int(k):v for k,v in data.get("subscribers", {}).items()}
             signals = data.get("signals", [])
