@@ -98,26 +98,7 @@ threading.Thread(target=enviar_sinais, daemon=True).start()
 
 # 🔹 Loop do bot
 print("✅ BOT SINAIS IA ALFA iniciado com sucesso!")
-bot.polling(non_stop=True)            with open(PERSIST_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            subscribers = {int(k):v for k,v in data.get("subscribers", {}).items()}
-            signals = data.get("signals", [])
-            stats.update(data.get("stats", {}))
-            print("[state] carregado", PERSIST_FILE)
-        except Exception as e:
-            print("[state] falha ao carregar:", e)
-
-def save_state():
-    try:
-        with open(PERSIST_FILE, "w", encoding="utf-8") as f:
-            obj = {
-                "subscribers": subscribers,
-                "signals": signals[-1000:],
-                "stats": stats
-            }
-            json.dump(obj, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print("[state] falha ao salvar:", e)
+bot.polling(non_stop=True)
 
 # ---------------- Telegram helpers ----------------
 def telegram_send_message(chat_id, text):
