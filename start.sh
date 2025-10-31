@@ -1,2 +1,3 @@
 #!/bin/bash
-python3 bot_sinais_ia.py
+echo "Iniciando BOT SINAIS IA ALFA..."
+python bot_sinais_ia.py
