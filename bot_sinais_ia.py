@@ -49,8 +49,8 @@ def loop_envio(chat_id):
             msg = f"🤖 *IA 2025 - Previsão Automática*"
 
 "📊" Último Resultado: {ultimo["number"]}
-🧠 Próximo Período: `{prox_periodo}`
-🎯 Próximo Sinal: {previsao}"
+"🧠" Próximo Período: `{prox_periodo}`
+"🎯" Próximo Sinal: {previsao}"
             bot.send_message(chat_id, msg, parse_mode="Markdown")
         time.sleep(5)
 
