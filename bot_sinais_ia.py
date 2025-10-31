@@ -46,7 +46,7 @@ def loop_envio(chat_id):
             ultimo = dados[0]
             previsao = prever_sinal(dados)
             prox_periodo = str(int(ultimo["issueNumber"]) + 1)
-            msg = f"🤖 *IA 2025 - Previsão Automática*
+            msg = f"🤖 *IA 2025 - Previsão Automática*"
 
 📊 Último Resultado: {ultimo['number']}
 🧠 Próximo Período: `{prox_periodo}`
