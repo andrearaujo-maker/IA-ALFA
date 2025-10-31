@@ -1,2 +1,3 @@
 #!/bin/bash
-python bot_sinais_ia.py
+pip install -r requirements.txt
+python3 bot_sinais_ia.py
