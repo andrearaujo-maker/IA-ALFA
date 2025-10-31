@@ -5,7 +5,7 @@ import json
 import threading
 
 # 🔹 Token do seu bot
-BOT_TOKEN = "COLOQUE_AQUI_SEU_TOKEN"
+BOT_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
 
 # 🔹 Lista de códigos válidos
 CODIGOS_VALIDOS = ["IA-ALFA-001", "IA-ALFA-002", "IA-ALFA-003", "IA-ALFA-004", "IA-ALFA-005"]
