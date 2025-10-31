@@ -48,7 +48,7 @@ def loop_envio(chat_id):
             prox_periodo = str(int(ultimo["issueNumber"]) + 1)
             msg = f"🤖 *IA 2025 - Previsão Automática*"
 
-📊 Último Resultado: {ultimo['Number']}
+📊 Último Resultado: {ultimo["Nnumber"]}
 🧠 Próximo Período: `{prox_periodo}`
 🎯 Próximo Sinal: {previsao}"
             bot.send_message(chat_id, msg, parse_mode="Markdown")
