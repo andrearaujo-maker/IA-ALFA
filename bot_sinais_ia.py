@@ -1,149 +1,123 @@
-import requests
-import time
-import random
 import json
-from telegram import Update, Bot
+import asyncio
+import random
+from datetime import datetime
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# ============= CONFIGURAÇÕES =====================
 TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
-API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-CODIGOS_ARQUIVO = "codigos.txt"
-USUARIOS_ARQUIVO = "usuarios_autorizados.json"
-INTERVALO_ATUALIZACAO = 5  # segundos
-# ==================================================
 
-# ---------- Funções auxiliares ----------
-def carregar_codigos():
+USUARIOS_FILE = "usuarios_autorizados.json"
+CODIGOS_FILE = "codigos_acesso.json"
+
+
+# ---------- Funções de Arquivo ----------
+def carregar_json(caminho):
     try:
-        with open(CODIGOS_ARQUIVO, "r") as f:
-            return [linha.strip() for linha in f.readlines() if linha.strip()]
-    except FileNotFoundError:
-        return []
-
-def salvar_codigos(codigos):
-    with open(CODIGOS_ARQUIVO, "w") as f:
-        for c in codigos:
-            f.write(c + "\n")
-
-def carregar_usuarios():
-    try:
-        with open(USUARIOS_ARQUIVO, "r") as f:
+        with open(caminho, "r") as f:
             return json.load(f)
-    except FileNotFoundError:
-        return []
+    except:
+        return {}
 
-def salvar_usuarios(usuarios):
-    with open(USUARIOS_ARQUIVO, "w") as f:
-        json.dump(usuarios, f)
 
-def obter_resultados():
-    try:
-        response = requests.get(API_URL, timeout=5)
-        data = response.json()
-        if "data" in data and "list" in data["data"]:
-            return data["data"]["list"][:10]  # últimos 10 resultados
-    except Exception as e:
-        print("Erro API:", e)
-    return []
+def salvar_json(caminho, dados):
+    with open(caminho, "w") as f:
+        json.dump(dados, f, indent=4)
 
-# ---------- IA preditiva simples ----------
-def prever_proximo(resultados):
-    if not resultados:
-        return random.choice(["Grande 🟠", "Pequeno 🔵"])
 
-    grandes = sum(1 for r in resultados if int(r["number"]) >= 5)
-    pequenos = len(resultados) - grandes
-    tendencia = "Grande 🟠" if grandes > pequenos else "Pequeno 🔵"
+# ---------- Sistema de Códigos ----------
+def gerar_codigo():
+    letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    return "IA-" + "".join(random.choices(letras, k=6))
 
-    # leve variação para simular aprendizado
-    if random.random() < 0.15:
-        tendencia = "Grande 🟠" if tendencia == "Pequeno 🔵" else "Pequeno 🔵"
 
-    return tendencia
+def criar_codigos(qtd=5):
+    codigos = carregar_json(CODIGOS_FILE)
+    for _ in range(qtd):
+        codigo = gerar_codigo()
+        codigos[codigo] = {"usado": False}
+    salvar_json(CODIGOS_FILE, codigos)
 
-# ---------- Comandos Telegram ----------
+
+# ---------- IA de Previsão ----------
+def previsao_ia():
+    opcoes = ["🔴 Grande", "🟢 Pequeno"]
+    return random.choice(opcoes)
+
+
+# ---------- Comandos ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    usuarios = carregar_usuarios()
+    user_id = str(update.effective_user.id)
+    usuarios = carregar_json(USUARIOS_FILE)
 
     if user_id in usuarios:
-        await update.message.reply_text("✅ Acesso liberado!\nUse /sinal para ver o último sinal IA.")
+        await update.message.reply_text("✅ Acesso já autorizado!\nAguarde o próximo sinal...")
+    else:
+        await update.message.reply_text("🔒 Envie seu código de acesso com o comando:\n\n`/acesso SEUCODIGO`")
+
+
+async def acesso(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    usuarios = carregar_json(USUARIOS_FILE)
+    codigos = carregar_json(CODIGOS_FILE)
+
+    if len(context.args) == 0:
+        await update.message.reply_text("⚠️ Use: `/acesso SEUCODIGO`")
         return
 
-    await update.message.reply_text("🔐 Envie seu código de acesso (ex: IA-2025):")
+    codigo = context.args[0].strip().upper()
 
-async def handle_codigo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    codigo = update.message.text.strip()
-    user_id = update.effective_user.id
-
-    codigos = carregar_codigos()
-    usuarios = carregar_usuarios()
-
-    if codigo in codigos:
-        usuarios.append(user_id)
-        codigos.remove(codigo)
-        salvar_codigos(codigos)
-        salvar_usuarios(usuarios)
-        await update.message.reply_text("✅ Acesso concedido!\nUse /sinal para receber previsões automáticas.")
+    if codigo in codigos and not codigos[codigo]["usado"]:
+        codigos[codigo]["usado"] = True
+        usuarios[user_id] = {"codigo": codigo, "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")}
+        salvar_json(CODIGOS_FILE, codigos)
+        salvar_json(USUARIOS_FILE, usuarios)
+        await update.message.reply_text("✅ Acesso autorizado! Você receberá os sinais automaticamente.")
     else:
         await update.message.reply_text("❌ Código inválido ou já usado.")
 
-async def sinal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    usuarios = carregar_usuarios()
 
-    if user_id not in usuarios:
-        await update.message.reply_text("🚫 Você não tem acesso. Envie um código válido.")
-        return
-
-    resultados = obter_resultados()
-    proximo_sinal = prever_proximo(resultados)
-    ultimo_periodo = resultados[0]["issueNumber"] if resultados else "Desconhecido"
-
-    await update.message.reply_text(
-        f"🎯 *Previsão IA*\n\n"
-        f"📅 Último Período: {ultimo_periodo}\n"
-        f"📊 Próximo Sinal: {proximo_sinal}",
-        parse_mode="Markdown"
-    )
-
-# ---------- Atualização automática ----------
-async def loop_sinais(bot: Bot):
-    ultimo_periodo = ""
+# ---------- Envio Automático de Sinais ----------
+async def enviar_sinais(app):
     while True:
-        resultados = obter_resultados()
-        if resultados:
-            periodo = resultados[0]["issueNumber"]
-            if periodo != ultimo_periodo:
-                ultimo_periodo = periodo
-                sinal = prever_proximo(resultados)
-                usuarios = carregar_usuarios()
-                for uid in usuarios:
-                    try:
-                        await bot.send_message(
-                            chat_id=uid,
-                            text=f"🎯 *Novo Sinal IA*\n📅 Período: {periodo}\n📊 Entrada: {sinal}",
-                            parse_mode="Markdown"
-                        )
-                    except Exception as e:
-                        print(f"Erro envio {uid}:", e)
-        time.sleep(INTERVALO_ATUALIZACAO)
+        usuarios = carregar_json(USUARIOS_FILE)
+        if not usuarios:
+            await asyncio.sleep(5)
+            continue
+
+        sinal = previsao_ia()
+        periodo = datetime.now().strftime("%H:%M:%S")
+
+        for user_id in usuarios:
+            try:
+                await app.bot.send_message(
+                    chat_id=user_id,
+                    text=(
+                        f"🎯 *Sinal Gerado pela IA - 2025*\n"
+                        f"⏱️ Período: `{periodo}`\n"
+                        f"👉 Entrada: {sinal}\n\n"
+                        f"💡 Use gerenciamento adequado!"
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                print(f"Erro ao enviar para {user_id}: {e}")
+
+        await asyncio.sleep(5)  # atualiza a cada 5 segundos
+
 
 # ---------- Inicialização ----------
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("sinal", sinal))
-    app.add_handler(CommandHandler("codigo", handle_codigo))
+    app.add_handler(CommandHandler("acesso", acesso))
 
-    bot = Bot(TOKEN)
-    app.create_task(loop_sinais(bot))
-
-    print("🤖 Bot IA iniciado com sucesso!")
+    print("🤖 Bot IA 2025 iniciado com sucesso!")
+    asyncio.create_task(enviar_sinais(app))
     await app.run_polling()
 
+
 if __name__ == "__main__":
-    import asyncio
+    criar_codigos(10)  # cria 10 códigos novos se não existirem
     asyncio.run(main())
