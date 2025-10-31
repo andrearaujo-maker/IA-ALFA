@@ -1,2 +1,1 @@
-requests
-pyTelegramBotAPI
+pytelegrambotapi==4.15.4
