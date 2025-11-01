@@ -1,5 +1,11 @@
+# Dependências principais do bot
 aiogram==2.25.1
-aiohttp==3.8.6
+aiohttp==3.8.5
 requests==2.31.0
-sqlite-utils==3.37
 python-dotenv==1.0.1
+sqlite-utils==3.37
+
+# Evita erro de build
+wheel==0.43.0
+setuptools==69.0.3
+pip==24.0
