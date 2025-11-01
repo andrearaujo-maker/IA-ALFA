@@ -1,120 +1,65 @@
-import asyncio
-import logging
-import sqlite3
-from aiogram import Bot, Dispatcher, executor, types
+from flask import Flask, render_template, request, redirect, session
+from flask_sqlalchemy import SQLAlchemy
+from apscheduler.schedulers.background import BackgroundScheduler
+from utils.signals import gerar_sinal
+from utils.telegram_bot import enviar_sinal
+from utils.database import db, Usuario
+from config import Config
 
-# =====================
-# CONFIGURAÇÕES DO BOT
-# =====================
-TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"  # <-- Substitua pelo seu token do Telegram
-ARQUIVO_DB = "usuarios.db"
+app = Flask(__name__)
+app.config.from_object(Config)
+db.init_app(app)
 
-# =====================
-# CONFIGURAR LOG
-# =====================
-logging.basicConfig(level=logging.INFO)
+with app.app_context():
+    db.create_all()
 
-# =====================
-# INICIALIZAÇÃO DO BOT
-# =====================
-bot = Bot(token=TOKEN)
-dp = Dispatcher(bot)
+# Função automática para enviar sinais a todos os usuários ativos
+def enviar_sinais_automaticos():
+    with app.app_context():
+        usuarios = Usuario.query.filter_by(ativo=True).all()
+        sinal = gerar_sinal()
+        for u in usuarios:
+            if u.chat_id:
+                enviar_sinal(u.chat_id, sinal)
 
-# =====================
-# CONFIGURAR BANCO DE DADOS
-# =====================
-def criar_tabelas():
-    conn = sqlite3.connect(ARQUIVO_DB)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-                    user_id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    ativo INTEGER
-                )''')
+scheduler = BackgroundScheduler()
+scheduler.add_job(enviar_sinais_automaticos, "interval", minutes=5)
+scheduler.start()
 
-    c.execute('''CREATE TABLE IF NOT EXISTS codigos (
-                    codigo TEXT PRIMARY KEY,
-                    usado INTEGER
-                )''')
-    conn.commit()
-    conn.close()
+@app.route("/")
+def home():
+    if "user" in session:
+        return redirect("/painel")
+    return redirect("/login")
 
-# gerar códigos
-def gerar_codigos():
-    codigos = [f"IA-ALFA-{i:03d}" for i in range(1, 21)]
-    conn = sqlite3.connect(ARQUIVO_DB)
-    c = conn.cursor()
-    for codigo in codigos:
-        c.execute("INSERT OR IGNORE INTO codigos (codigo, usado) VALUES (?, ?)", (codigo, 0))
-    conn.commit()
-    conn.close()
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form["email"]
+        senha = request.form["senha"]
+        user = Usuario.query.filter_by(email=email, senha=senha).first()
+        if user:
+            session["user"] = user.email
+            return redirect("/painel")
+    return render_template("login.html")
 
-criar_tabelas()
-gerar_codigos()
+@app.route("/painel")
+def painel():
+    if "user" not in session:
+        return redirect("/login")
+    return render_template("painel.html")
 
-# =====================
-# COMANDO /start
-# =====================
-@dp.message_handler(commands=["start"])
-async def start_cmd(message: types.Message):
-    await message.answer(
-        "👋 Olá! Envie seu código de acesso com:\n\n"
-        "`/redeem <CÓDIGO>`\n\nExemplo:\n`/redeem IA-ALFA-001`",
-        parse_mode="Markdown"
-    )
+@app.route("/registrar", methods=["GET", "POST"])
+def registrar():
+    if request.method == "POST":
+        nome = request.form["nome"]
+        email = request.form["email"]
+        senha = request.form["senha"]
+        user = Usuario(nome=nome, email=email, senha=senha)
+        db.session.add(user)
+        db.session.commit()
+        return redirect("/login")
+    return render_template("register.html")
 
-# =====================
-# COMANDO /redeem
-# =====================
-@dp.message_handler(commands=["redeem"])
-async def redeem_cmd(message: types.Message):
-    try:
-        codigo = message.text.split(" ")[1].strip().upper()
-    except IndexError:
-        await message.answer("⚠️ Use o formato: `/redeem IA-ALFA-001`", parse_mode="Markdown")
-        return
-
-    conn = sqlite3.connect(ARQUIVO_DB)
-    c = conn.cursor()
-    c.execute("SELECT usado FROM codigos WHERE codigo = ?", (codigo,))
-    resultado = c.fetchone()
-
-    if not resultado:
-        await message.answer("❌ Código inválido.")
-    elif resultado[0] == 1:
-        await message.answer("⚠️ Este código já foi usado.")
-    else:
-        c.execute("UPDATE codigos SET usado = 1 WHERE codigo = ?", (codigo,))
-        c.execute("INSERT OR REPLACE INTO usuarios (user_id, username, ativo) VALUES (?, ?, ?)",
-                  (message.from_user.id, message.from_user.username, 1))
-        conn.commit()
-        await message.answer("✅ Código aceito! Você será incluído na lista para receber sinais automáticos.")
-    conn.close()
-
-# =====================
-# FUNÇÃO PARA ENVIAR SINAIS AUTOMÁTICOS
-# =====================
-async def enviar_sinais():
-    while True:
-        await asyncio.sleep(30)  # intervalo entre sinais (30 segundos de exemplo)
-        conn = sqlite3.connect(ARQUIVO_DB)
-        c = conn.cursor()
-        c.execute("SELECT user_id FROM usuarios WHERE ativo = 1")
-        usuarios = c.fetchall()
-        conn.close()
-
-        sinal = "🎯 Sinal Gerado!\n👉 Entrada: 🔵 Pequeno\n💰 Estratégia: Martingale (1, 2, 6, 18, 54, 162)\n🚀 Boa sorte!"
-
-        for (user_id,) in usuarios:
-            try:
-                await bot.send_message(user_id, sinal)
-            except Exception as e:
-                print(f"Erro ao enviar sinal para {user_id}: {e}")
-
-# =====================
-# EXECUÇÃO PRINCIPAL
-# =====================
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(enviar_sinais())
-    executor.start_polling(dp, skip_updates=True)
+    app.run(host="0.0.0.0", port=10000)
