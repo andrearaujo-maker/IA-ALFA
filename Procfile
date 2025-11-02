@@ -1,1 +1,1 @@
-worker: python bot_sinais_ia.py
+worker: python bot_ia_popbra.py
