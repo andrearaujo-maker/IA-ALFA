@@ -1,40 +1,351 @@
-import telebot
-import json
-import time
+# bot_ia_popbra.py
+# Bot Telegram individual com IA probabilística adaptativa (simulação por padrão)
+# Requisitos: requests
+# Rodar: python bot_ia_popbra.py
+
+import requests
 import threading
-import random
-from datetime import datetime
+import time
+import json
+import os
+from collections import defaultdict, Counter
 
-TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
-bot = telebot.TeleBot(TOKEN)
+# ---------------- CONFIG ----------------
+TELEGRAM_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"  # seu token (guarde seguro)
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+USE_REAL_API = True   # False = usa dados simulados; True = buscar a API real (cuidado com CORS/limites)
+API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+FETCH_INTERVAL = 5     # segundos
+LOOKBACK_MAX = 200
+ANALYZE_WINDOW_SIZES = [3,4,5,6]
+PERSIST_FILE = "aprendizado_bot.json"
+# ----------------------------------------
 
-# Arquivos de controle
-CODIGOS_FILE = "codigos.txt"
-USUARIOS_ATIVOS_FILE = "usuarios_ativos.json"
+# Estado em memória
+numeric_history = []   # lista de ints (oldest->newest)
+gp_history = []        # list of 'G'/'P'
+last_issue = None
+signals = []           # lista de dicts de sinais gerados (opcional)
+subscribers = {}       # chat_id -> {last_sent: 'G'/'P' or None}
+stats = {"total":0, "correct":0, "accuracy":0.0}
 
-# Função para carregar e salvar usuários
-def carregar_usuarios_ativos():
+# Persistence helpers
+def load_state():
+    global subscribers, signals, stats
+    if os.path.exists(PERSIST_FILE):
+        try:
+            with open(PERSIST_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            subscribers = {int(k):v for k,v in data.get("subscribers", {}).items()}
+            signals = data.get("signals", [])
+            stats.update(data.get("stats", {}))
+            print("[state] carregado", PERSIST_FILE)
+        except Exception as e:
+            print("[state] falha ao carregar:", e)
+
+def save_state():
     try:
-        with open(USUARIOS_ATIVOS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return []
+        with open(PERSIST_FILE, "w", encoding="utf-8") as f:
+            obj = {
+                "subscribers": subscribers,
+                "signals": signals[-1000:],
+                "stats": stats
+            }
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("[state] falha ao salvar:", e)
 
-def salvar_usuarios_ativos(lista):
-    with open(USUARIOS_ATIVOS_FILE, "w") as f:
-        json.dump(lista, f)
-
-# Carregar códigos de acesso
-def carregar_codigos():
+# ---------------- Telegram helpers ----------------
+def telegram_send_message(chat_id, text):
+    url = f"{TELEGRAM_API}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
     try:
-        with open(CODIGOS_FILE, "r") as f:
-            return [linha.strip() for linha in f.readlines()]
-    except:
-        return []
+        r = requests.post(url, json=payload, timeout=8)
+        return r.ok
+    except Exception as e:
+        print("[tg] send error:", e)
+        return False
 
-# Função de previsão da IA (simulação com lógica inteligente)
-def gerar_previsao():
-    numero = random.randint(0, 9)
+# Simple getUpdates loop to detect /start and /stop
+last_update_id = None
+def telegram_updates_loop():
+    global last_update_id
+    print("[tg] iniciando loop de updates (use /start para se registrar)")
+    while True:
+        try:
+            url = f"{TELEGRAM_API}/getUpdates"
+            params = {"timeout": 10}
+            if last_update_id:
+                params["offset"] = last_update_id + 1
+            r = requests.get(url, params=params, timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("ok"):
+                    for item in data.get("result", []):
+                        last_update_id = item["update_id"]
+                        # handle message
+                        msg = item.get("message") or item.get("edited_message")
+                        if not msg:
+                            continue
+                        chat_id = msg["chat"]["id"]
+                        text = msg.get("text","").strip()
+                        if text.startswith("/start"):
+                            subscribers[chat_id] = {"last_sent": None}
+                            save_state()
+                            telegram_send_message(chat_id, "✅ Registrado! Você receberá o último sinal automático (enviaremos apenas novos sinais).")
+                            # send immediate last prediction if exists
+                            if gp_history:
+                                pred, conf, next_issue = current_prediction_payload()
+                                send_prediction_to_chat(chat_id, pred, conf, next_issue)
+                        elif text.startswith("/stop"):
+                            if chat_id in subscribers:
+                                del subscribers[chat_id]
+                                save_state()
+                            telegram_send_message(chat_id, "🛑 Você foi desregistrado. Envie /start para receber sinais novamente.")
+                        elif text.startswith("/status"):
+                            # quick status
+                            pred, conf, next_issue = current_prediction_payload()
+                            st = f"Status:\nPróximo Período: {next_issue}\nPróximo Sinal: {'🟠 Grande' if pred=='G' else '🔵 Pequeno' if pred=='P' else '-'}\nConfiança: {conf}%\nAssinantes: {len(subscribers)}\nAcertos: {stats.get('correct',0)} / {stats.get('total',0)}  ({stats.get('accuracy',0)}%)"
+                            telegram_send_message(chat_id, st)
+                        # else ignore other messages
+        except Exception as e:
+            print("[tg] updates loop error:", e)
+            time.sleep(2)
+
+# helper to format and send prediction
+def send_prediction_to_chat(chat_id, prediction, confidence, next_issue):
+    if prediction not in ('G','P'):
+        return
+    # only send if different from last sent to this chat_id
+    last = subscribers.get(chat_id, {}).get("last_sent")
+    if last == prediction:
+        return False
+    text = (
+        "🎯 Sinal Automático\n"
+        f"🔮 Próxima Entrada: {'🟠 Grande' if prediction=='G' else '🔵 Pequeno'}\n"
+        f"📅 Período: {next_issue}\n"
+        f"🤖 Confiança: {confidence}%\n\n"
+        "🔔 Para parar de receber: /stop"
+    )
+    ok = telegram_send_message(chat_id, text)
+    if ok:
+        # update last_sent and persist
+        subscribers[chat_id]["last_sent"] = prediction
+        save_state()
+    return ok
+
+# ---------------- Data source (simulated or real) ----------------
+# sample simulated list (most recent first) - using the example you sent
+SIMULATED_JSON = {
+  "data": {
+    "list": [
+      {"issueNumber":"20251006100011135","number":"4"},
+      {"issueNumber":"20251006100011134","number":"4"},
+      {"issueNumber":"20251006100011133","number":"4"},
+      {"issueNumber":"20251006100011132","number":"3"},
+      {"issueNumber":"20251006100011131","number":"5"},
+      {"issueNumber":"20251006100011130","number":"5"},
+      {"issueNumber":"20251006100011129","number":"5"},
+      {"issueNumber":"20251006100011128","number":"2"},
+      {"issueNumber":"20251006100011127","number":"9"},
+      {"issueNumber":"20251006100011126","number":"2"}
+    ]
+  }
+}
+
+def fetch_api_list():
+    if USE_REAL_API:
+        try:
+            r = requests.get(API_URL, timeout=8)
+            if r.status_code == 200:
+                return r.json().get("data", {}).get("list", [])
+            else:
+                return []
+        except Exception as e:
+            print("[api] fetch error:", e)
+            return []
+    else:
+        # return simulated copy (fresh copy each time)
+        return list(SIMULATED_JSON["data"]["list"])
+
+# ---------------- Adaptive predictor (same idea as before, compacted) ----------------
+def find_pattern_candidates(seq_str):
+    candidates = []
+    n = len(seq_str)
+    if n < 2:
+        return candidates
+    for w in ANAlYZE_WINDOW_SIZES_PLACEHOLDER:  # will be replaced below properly
+        pass
+
+# We'll implement predictive functions directly (cleaner)
+def find_pattern_candidates_seq(seq_str):
+    candidates = []
+    n = len(seq_str)
+    if n < 2:
+        return candidates
+    for w in ANALYZE_WINDOW_SIZES:
+        if n <= w:
+            continue
+        pattern = seq_str[-w:]
+        for i in range(0, n - w):
+            if seq_str[i:i+w] == pattern:
+                if i + w < n:
+                    nxt = seq_str[i+w]
+                    weight = w * (1 + (i / max(1, n)))
+                    candidates.append((nxt, weight))
+    return candidates
+
+def adaptive_predict_from_seq(seq_str):
+    if not seq_str:
+        return None, 0
+    candidates = find_pattern_candidates_seq(seq_str)
+    if candidates:
+        agg = defaultdict(float)
+        for val,w in candidates:
+            agg[val] += w
+        total = sum(agg.values())
+        if total <= 0:
+            return None, 0
+        probG = agg.get('G', 0.0)/total
+        probP = agg.get('P', 0.0)/total
+        # transition evidence
+        last = seq_str[-1]
+        trans_counts = {'G':0,'P':0}
+        for i in range(len(seq_str)-1):
+            if seq_str[i] == last:
+                trans_counts[seq_str[i+1]] += 1
+        trans_total = trans_counts['G'] + trans_counts['P']
+        if trans_total > 0:
+            tG = trans_counts['G']/trans_total
+            tP = trans_counts['P']/trans_total
+            probG = 0.7*probG + 0.3*tG
+            probP = 0.7*probP + 0.3*tP
+        s = probG + probP
+        if s <= 0:
+            return None, 0
+        probG /= s; probP /= s
+        # adjust by accuracy
+        acc = stats.get("accuracy", 0.0)
+        acc_factor = max(0.6, min(1.2, 1.0 + (acc - 50)/200))
+        probG *= acc_factor; probP *= acc_factor
+        s2 = probG + probP
+        if s2 <= 0:
+            return None, 0
+        probG /= s2; probP /= s2
+        return ('G', int(round(probG*100))) if probG>probP else ('P', int(round(probP*100)))
+    # fallback: transition heuristic
+    g_count = seq_str.count('G'); p_count = seq_str.count('P')
+    if g_count + p_count == 0:
+        return None, 0
+    last = seq_str[-1]
+    trans_counts = {'G':0,'P':0}
+    for i in range(len(seq_str)-1):
+        if seq_str[i] == last:
+            trans_counts[seq_str[i+1]] += 1
+    trans_total = trans_counts['G'] + trans_counts['P']
+    if trans_total > 0:
+        pred = 'G' if trans_counts['G'] > trans_counts['P'] else 'P'
+        conf = int(round((max(trans_counts['G'], trans_counts['P'])/trans_total)*60))
+        return pred, conf
+    # frequency revert
+    if g_count > p_count:
+        return 'P', int(round((g_count/(g_count+p_count))*40))
+    elif p_count > g_count:
+        return 'G', int(round((p_count/(g_count+p_count))*40))
+    else:
+        return ('G' if int(time.time())%2==0 else 'P'), 20
+
+# wrapper to get current prediction
+def current_prediction_payload():
+    seq = ''.join(gp_history[-LOOKBACK_MAX:]) if gp_history else ""
+    pred, conf = adaptive_predict_from_seq(seq)
+    # next_issue calculation
+    next_issue = None
+    if last_issue:
+        try:
+            next_issue = str(int(last_issue) + 1)
+        except:
+            next_issue = (last_issue or "") + "+1"
+    return pred, conf, next_issue
+
+# ---------------- Main loop: fetch -> predict -> send ----------------
+def update_history_from_api_and_predict():
+    global last_issue
+    while True:
+        try:
+            lst = fetch_api_list()
+            if lst:
+                # API returns newest-first -> we will process accordingly
+                # take first N then reverse to chronological
+                take = min(len(lst), LOOKBACK_MAX)
+                items = list(reversed(lst[:take]))
+                added_new = False
+                for item in items:
+                    try:
+                        n = int(item.get("number", item.get("num", 0)))
+                    except:
+                        continue
+                    issue = item.get("issueNumber") or item.get("issue") or None
+                    # append if new
+                    if not numeric_history or (issue and issue != last_issue):
+                        numeric_history.append(n)
+                        gp_history.append('G' if n >= 5 else 'P')
+                        last_issue = issue or last_issue
+                        added_new = True
+                # trim
+                if len(numeric_history) > LOOKBACK_MAX:
+                    del numeric_history[0: len(numeric_history)-LOOKBACK_MAX]
+                    del gp_history[0: len(gp_history)-LOOKBACK_MAX]
+                # if new actuals arrived, evaluate last pending signal:
+                if added_new and signals:
+                    # evaluate last
+                    last_sig = signals[-1]
+                    if not last_sig.get("evaluated"):
+                        actual = gp_history[-1]
+                        last_sig["actual"] = actual
+                        last_sig["evaluated"] = True
+                        last_sig["correct"] = (last_sig["prediction"] == actual)
+                        # update stats
+                        stats["total"] += 1
+                        if last_sig["correct"]:
+                            stats["correct"] += 1
+                        stats["accuracy"] = round((stats["correct"]/stats["total"])*100, 2) if stats["total"]>0 else 0.0
+                        save_state()
+                # predict next
+                pred, conf, next_issue = current_prediction_payload()
+                # create a pending signal object
+                sig = {"ts": int(time.time()), "prediction": pred, "confidence": conf, "next_issue": next_issue, "actual": None, "evaluated": False, "correct": None}
+                signals.append(sig)
+                # send to subscribers but only if differs from last_sent
+                for chat_id in list(subscribers.keys()):
+                    try:
+                        send_prediction_to_chat(chat_id, pred, conf, next_issue)
+                    except Exception as e:
+                        print("[send] error to", chat_id, e)
+                save_state()
+        except Exception as e:
+            print("[main loop] error:", e)
+        time.sleep(FETCH_INTERVAL)
+
+# -------------- Initialization & run --------------
+def start_all():
+    load_state()
+    # start telegram updates loop
+    t1 = threading.Thread(target=telegram_updates_loop, daemon=True)
+    t1.start()
+    # start main fetch/predict/send loop
+    t2 = threading.Thread(target=update_history_from_api_and_predict, daemon=True)
+    t2.start()
+    print("Bot IA POPBRA iniciado. Aguarde e envie /start no seu bot para receber sinais.")
+    # keep main thread alive
+    while True:
+        time.sleep(60)
+
+if __name__ == "__main__":
+    # small fix: ensure ANALYZE_WINDOW_SIZES exists; also import missing names used in functions
+    from collections import defaultdict
+    # start
+    start_all()    numero = random.randint(0, 9)
     if numero >= 5:
         sinal = "🟠 Grande"
     else:
