@@ -1,0 +1,7 @@
+services:
+  - type: worker
+    name: ia-popbra
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python bot_ia_popbra.py"
+    plan: free
