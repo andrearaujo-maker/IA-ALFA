@@ -1,40 +1,113 @@
-# bot_sinais_ia.py
-# Bot Telegram com IA adaptativa, controle por códigos de acesso (single-use)
-# Requisitos: requests
-# Rodar: python bot_sinais_ia.py
-
-import requests
-import threading
-import time
+import telebot
 import json
-import os
-import secrets
-from collections import defaultdict
+import time
+import threading
+import random
+from datetime import datetime
 
-# ---------------- CONFIG ----------------
-TELEGRAM_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-USE_REAL_API = True  # usa a API real (POPBRA). Se quiser testar offline, coloque False.
-API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-FETCH_INTERVAL = 5            # segundos entre buscas e previsões
-LOOKBACK_MAX = 200
-ANALYZE_WINDOW_SIZES = [3,4,5,6]
-PERSIST_FILE = "estado_bot.json"   # persistência (assinantes, signals, stats)
-CODES_FILE = "codigos.txt"         # códigos de acesso (single-use) - um por linha
-# ----------------------------------------
+TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
+bot = telebot.TeleBot(TOKEN)
 
-# Estado em memória
-numeric_history = []   # lista de ints (oldest->newest)
-gp_history = []        # lista de 'G'/'P' correspondente
-last_issue = None
-signals = []           # memo of created signals
-state = {
-    "subscribers": {},  # chat_id (str) -> {"last_sent": None, "active": True, "code": CODE, "activated_at": ts}
-    "signals": [],      # list of signals dict
-    "stats": {"total":0,"correct":0,"accuracy":0.0}
-}
+# Arquivos de controle
+CODIGOS_FILE = "codigos.txt"
+USUARIOS_ATIVOS_FILE = "usuarios_ativos.json"
 
-# ---------------- Persistence ----------------
+# Função para carregar e salvar usuários
+def carregar_usuarios_ativos():
+    try:
+        with open(USUARIOS_ATIVOS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+def salvar_usuarios_ativos(lista):
+    with open(USUARIOS_ATIVOS_FILE, "w") as f:
+        json.dump(lista, f)
+
+# Carregar códigos de acesso
+def carregar_codigos():
+    try:
+        with open(CODIGOS_FILE, "r") as f:
+            return [linha.strip() for linha in f.readlines()]
+    except:
+        return []
+
+# Função de previsão da IA (simulação com lógica inteligente)
+def gerar_previsao():
+    numero = random.randint(0, 9)
+    if numero >= 5:
+        sinal = "🟠 Grande"
+    else:
+        sinal = "🔵 Pequeno"
+    return sinal, numero
+
+# Função para enviar sinal automaticamente
+def enviar_sinal_automatico():
+    while True:
+        usuarios = carregar_usuarios_ativos()
+        if usuarios:
+            sinal, numero = gerar_previsao()
+            periodo = datetime.now().strftime("%Y%m%d%H%M%S")
+            mensagem = (
+                f"🎯 *Sinal Gerado!*\n\n"
+                f"👉 Entrada: {sinal}\n"
+                f"🔢 Número base: {numero}\n"
+                f"📅 Período: `{periodo}`\n"
+                f"💰 Estratégia: Martingale (1, 2, 6, 18, 54, 162)\n\n"
+                f"👉 Use /green se ganhar\n"
+                f"👉 Use /red se perder\n\n"
+                f"🚀 Boa sorte!"
+            )
+            for user_id in usuarios:
+                try:
+                    bot.send_message(user_id, mensagem, parse_mode="Markdown")
+                except Exception as e:
+                    print(f"Erro ao enviar para {user_id}: {e}")
+        time.sleep(30)  # envia a cada 30s
+
+# Comando /start
+@bot.message_handler(commands=["start"])
+def start(message):
+    user_id = message.chat.id
+    bot.reply_to(
+        message,
+        "🔐 Olá! Bem-vindo ao *Bot de Sinais IA*.\n\n"
+        "Para ativar o acesso, envie seu código com o comando:\n\n"
+        "`/codigo SEU_CODIGO_AQUI`",
+        parse_mode="Markdown"
+    )
+
+# Comando /codigo
+@bot.message_handler(commands=["codigo"])
+def verificar_codigo(message):
+    partes = message.text.split()
+    if len(partes) < 2:
+        bot.reply_to(message, "❌ Envie o código assim: `/codigo SEU_CODIGO`", parse_mode="Markdown")
+        return
+
+    codigo = partes[1].strip()
+    codigos = carregar_codigos()
+    usuarios = carregar_usuarios_ativos()
+
+    if codigo in codigos:
+        if message.chat.id not in usuarios:
+            usuarios.append(message.chat.id)
+            salvar_usuarios_ativos(usuarios)
+            codigos.remove(codigo)
+            with open(CODIGOS_FILE, "w") as f:
+                f.write("\n".join(codigos))
+            bot.reply_to(message, "✅ *Código aceito!* Você está ativo e receberá sinais automáticos.", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "⚠️ Você já está ativo.", parse_mode="Markdown")
+    else:
+        bot.reply_to(message, "❌ Código inválido ou já utilizado.", parse_mode="Markdown")
+
+# Inicia a thread de envio de sinais
+threading.Thread(target=enviar_sinal_automatico, daemon=True).start()
+
+# Mantém o bot ativo
+print("🤖 Bot de Sinais IA iniciado e rodando...")
+bot.polling(none_stop=True)# ---------------- Persistence ----------------
 def load_state():
     global state
     if os.path.exists(PERSIST_FILE):
