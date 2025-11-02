@@ -154,7 +154,6 @@ def adaptive_predict_from_seq(seq_str):
             return None, 0
         probG = agg.get('G',0.0)/total
         probP = agg.get('P',0.0)/total
-        # transition evidence
         last = seq_str[-1]
         trans_counts = {'G':0,'P':0}
         for i in range(len(seq_str)-1):
@@ -170,7 +169,6 @@ def adaptive_predict_from_seq(seq_str):
         if s <= 0:
             return None, 0
         probG/=s; probP/=s
-        # adjust by accuracy
         acc = state.get("stats", {}).get("accuracy", 0.0)
         acc_factor = max(0.6, min(1.2, 1.0 + (acc - 50)/200))
         probG *= acc_factor; probP *= acc_factor
@@ -179,7 +177,6 @@ def adaptive_predict_from_seq(seq_str):
             return None, 0
         probG/=s2; probP/=s2
         return ('G', int(round(probG*100))) if probG>probP else ('P', int(round(probP*100)))
-    # fallback heuristics
     g_count = seq_str.count('G'); p_count = seq_str.count('P')
     if g_count + p_count == 0:
         return None, 0
@@ -218,7 +215,6 @@ def send_prediction_to_chat(chat_id, prediction, confidence, next_issue):
     sub = state["subscribers"].get(str(chat_id))
     if not sub or not sub.get("active"):
         return False
-    # only send if differs from last_sent
     if sub.get("last_sent") == prediction:
         return False
     text = (
@@ -274,19 +270,29 @@ def telegram_updates_loop():
                     code = parts[1].strip().upper()
                     available = load_codes()
                     if code not in available:
-                        telegram_send_message(chat_id, "Código inválido ou já utilizado.")
+                        telegram_send_message(chat_id, "❌ Código inválido ou já utilizado.")
                         continue
-                    # consume code and register subscriber
+
+                    # 🔹 Remove o código usado e registra o assinante
                     ok = remove_code_from_file(code)
                     if not ok:
                         telegram_send_message(chat_id, "Erro ao processar o código. Tente novamente.")
                         continue
-                    state["subscribers"][str(chat_id)] = {"last_sent": None, "active": True, "code": code, "activated_at": int(time.time())}
+
+                    # 🔹 Marca o usuário como ativo imediatamente
+                    state["subscribers"][str(chat_id)] = {
+                        "last_sent": None,
+                        "active": True,
+                        "code": code,
+                        "activated_at": int(time.time())
+                    }
                     save_state()
+
                     telegram_send_message(chat_id, "✅ Código aceito! Você está ativo e receberá sinais automáticos.")
-                    # send current prediction immediately if available
-                    if gp_history:
-                        pred, conf, next_issue = current_prediction_payload()
+
+                    # 🔹 Envia uma previsão imediata
+                    pred, conf, next_issue = current_prediction_payload()
+                    if pred in ("G", "P"):
                         send_prediction_to_chat(chat_id, pred, conf, next_issue)
                 elif cmd == "/stop":
                     if str(chat_id) in state["subscribers"]:
@@ -299,19 +305,9 @@ def telegram_updates_loop():
                     pred, conf, next_issue = current_prediction_payload()
                     s = f"Status:\nPeríodo: {next_issue}\nSinal: {'🟠 Grande' if pred=='G' else '🔵 Pequeno' if pred=='P' else '-'}\nConfiança: {conf}%\nAssinantes: {sum(1 for v in state['subscribers'].values() if v.get('active'))}\nAcertos: {state['stats'].get('correct',0)} / {state['stats'].get('total',0)} ({state['stats'].get('accuracy',0)}%)"
                     telegram_send_message(chat_id, s)
-                # admin simple: check if message starts with /admin and then password and action
                 elif cmd == "/admin":
-                    # e.g. /admin <senha> gen <n>
-                    parts = text.split()
-                    if len(parts) < 3:
-                        telegram_send_message(chat_id, "Uso admin: /admin <SENHA> <comando> ...")
-                        continue
-                    pwd = parts[1]
-                    # NOTE: for admin security remove or change this check to env var if needed
-                    # We'll ask admin password interactively later; for now keep it simple: prompt to implement.
                     telegram_send_message(chat_id, "Comandos admin não disponíveis neste script público.")
                 else:
-                    # unknown command - ignore or inform
                     pass
         except Exception as e:
             print("[tg] updates loop error:", e)
@@ -325,7 +321,7 @@ def main_loop():
             lst = fetch_api_list()
             if lst:
                 take = min(len(lst), LOOKBACK_MAX)
-                items = list(reversed(lst[:take]))  # oldest->newest
+                items = list(reversed(lst[:take]))
                 added_new = False
                 for item in items:
                     try:
@@ -333,17 +329,14 @@ def main_loop():
                     except:
                         continue
                     issue = item.get("issueNumber") or item.get("issue") or None
-                    # append if new (issue changed) OR numeric_history empty
                     if not numeric_history or (issue and issue != last_issue):
                         numeric_history.append(n)
                         gp_history.append('G' if n >= 5 else 'P')
                         last_issue = issue or last_issue
                         added_new = True
-                # trim history
                 if len(numeric_history) > LOOKBACK_MAX:
                     del numeric_history[0: len(numeric_history)-LOOKBACK_MAX]
                     del gp_history[0: len(gp_history)-LOOKBACK_MAX]
-                # evaluate last pending signal if we have new actual
                 if added_new and state.get("signals"):
                     last_sig = state["signals"][-1]
                     if not last_sig.get("evaluated") and gp_history:
@@ -358,12 +351,9 @@ def main_loop():
                         correct = state["stats"].get("correct",0)
                         state["stats"]["accuracy"] = round((correct/total)*100,2) if total>0 else 0.0
                         save_state()
-                # predict next
                 pred, conf, next_issue = current_prediction_payload()
-                # store signal
                 sig = {"ts": int(time.time()), "prediction": pred, "confidence": conf, "next_issue": next_issue, "evaluated": False}
                 state.setdefault("signals", []).append(sig)
-                # send to subscribers automatically (only if different from last_sent)
                 for chat_id_str, info in list(state["subscribers"].items()):
                     try:
                         cid = int(chat_id_str)
@@ -379,13 +369,10 @@ def main_loop():
 # --------------- Start ----------------
 if __name__ == "__main__":
     load_state()
-    # start telegram update loop (recebe /start, /redeem, /stop)
     t1 = threading.Thread(target=telegram_updates_loop, daemon=True)
     t1.start()
-    # start main loop
     t2 = threading.Thread(target=main_loop, daemon=True)
     t2.start()
     print("Bot iniciado. Peça para clientes enviarem /start e depois /redeem <CÓDIGO>.")
-    # keep alive
     while True:
-        time.sleep(60)
+        time.sleep(30)
