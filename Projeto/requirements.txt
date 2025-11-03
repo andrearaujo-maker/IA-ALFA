@@ -1,3 +1,1 @@
-git add requirements.txt
-git commit -m "Adiciona requirements.txt para Render"
-git push origin main
+requests==2.31.0
