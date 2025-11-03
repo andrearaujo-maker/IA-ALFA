@@ -345,7 +345,8 @@ if __name__ == "__main__":
     # small fix: ensure ANALYZE_WINDOW_SIZES exists; also import missing names used in functions
     from collections import defaultdict
     # start
-    start_all()    
+    start_all()  
+    
     numero = random.randint(0, 9)
     if numero >= 5:
         sinal = "🟠 Grande"
