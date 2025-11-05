@@ -254,7 +254,8 @@ if __name__ == "__main__":
     t2.start()
     print("Bot rodando. Use /start no Telegram para começar.")
     while True:
-        time.sleep(30)signals = []       # histórico de sinais gerados
+        time.sleep(60)
+        signals = []       # histórico de sinais gerados
 stats = {"total":0, "correct":0, "accuracy":0.0}
 
 # codes map (code -> bool available)
