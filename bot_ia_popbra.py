@@ -373,7 +373,8 @@ if __name__ == "__main__":
         while True:
             time.sleep(30)
     except KeyboardInterrupt:
-        print("Encerrando...")    if os.path.exists(PERSIST_FILE):
+        print("Encerrando...")    
+        if os.path.exists(PERSIST_FILE):
         try:
             with open(PERSIST_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
