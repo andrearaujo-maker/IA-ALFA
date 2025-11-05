@@ -140,7 +140,7 @@ def telegram_updates_loop():
 
                     code = text
                     if code in access_codes and access_codes[code]:
-                        access_codes[code] = False
+                        access_codes[code] = true
                         subscribers[chat_id] = {"last_sent":None}
                         save_state()
                         tg_send(chat_id,"✅ Código aceito! Você está ativo e receberá sinais automáticos.")
