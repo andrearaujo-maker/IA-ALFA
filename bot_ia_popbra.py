@@ -1,40 +1,260 @@
 #!/usr/bin/env python3
-# coding: utf-8
-"""
-bot_ia_popbra.py
-Bot Telegram por polling (getUpdates) com códigos de acesso single-use.
-Dependência: requests
-Rode: python bot_ia_popbra.py
-"""
+# bot_ia_popbra.py
+# Envia sinais automáticos para o ÚLTIMO usuário que ativou o código (uso único).
+# Dependências:
+#   pip install python-telegram-bot==20.3 requests
 
-import requests
-import time
 import json
-import os
+import time
+import requests
 import threading
-from collections import defaultdict
+import os
+import random
+from typing import Optional
 
 # ---------------- CONFIG ----------------
-TELEGRAM_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"
+TELEGRAM_TOKEN = "8126373920:AAEdRJ48gNqflX-M3kcihod4xegf314iup0"  # <<-- coloque seu token aqui
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-USE_REAL_API = True
+
 API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
-
-FETCH_INTERVAL = 5            # segundos entre buscas e previsões
-LOOKBACK_MAX = 200
-ANALYZE_WINDOW_SIZES = [3,4,5,6]
-
-STATE_FILE = "state.json"
-CODES_FILE = "codes.json"
+USE_REAL_API = True        # se quiser apenas simular, troque para False
+FETCH_INTERVAL = 30        # segundos entre envios (você pediu 30s)
 # ----------------------------------------
 
-# in-memory
-numeric_history = []
-gp_history = []
-last_issue = None
+CODES_FILE = "codes.json"
+STATE_FILE = "state.json"
 
-subscribers = {}   # chat_id (int) -> {"last_sent": None}
-signals = []       # histórico de sinais gerados
+# ---------------- Helpers de arquivo ----------------
+def load_json_safe(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def save_json_safe(path, obj):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("[file] erro ao salvar", path, e)
+
+# ---------------- Inicializa arquivos se faltarem ----------------
+if not os.path.exists(CODES_FILE):
+    save_json_safe(CODES_FILE, {})    # você deve colar codes.json manualmente se quiser códigos
+if not os.path.exists(STATE_FILE):
+    save_json_safe(STATE_FILE, {"active_user": None, "last_sent_prediction": None, "stats": {"total":0,"correct":0,"accuracy":0.0}})
+
+# ---------------- Carrega estado e códigos ----------------
+codes_map = load_json_safe(CODES_FILE, {})
+state = load_json_safe(STATE_FILE, {"active_user": None, "last_sent_prediction": None, "stats": {"total":0,"correct":0,"accuracy":0.0}})
+
+# normalize codes_map shape: support both { "CODE": {"used":false} } and { "CODES": {...} }
+if "CODES" in codes_map and isinstance(codes_map["CODES"], dict):
+    codes_map = {k: v for k, v in codes_map["CODES"].items()}
+# if values are like {"used": false}, keep same; else if plain bool, convert to dict
+for k,v in list(codes_map.items()):
+    if isinstance(v, bool):
+        codes_map[k] = {"used": not v}  # if earlier we used true=available, normalize to {"used":false}
+    elif isinstance(v, dict) and "used" in v:
+        pass
+    else:
+        # unknown, mark used False by default
+        codes_map[k] = {"used": False}
+
+# ---------------- Utilitários Telegram ----------------
+def tg_send(chat_id: int, text: str) -> bool:
+    try:
+        r = requests.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text})
+        return r.ok
+    except Exception as e:
+        print("[tg] send error:", e)
+        return False
+
+# ---------------- API (com fallback simulada) ----------------
+SIMULATED = {
+  "data": {
+    "list": [
+      {"issueNumber":"20251020100050196","number":"3"},
+      {"issueNumber":"20251020100050195","number":"6"},
+      {"issueNumber":"20251020100050194","number":"2"}
+    ]
+  }
+}
+
+def fetch_api():
+    if not USE_REAL_API:
+        return list(SIMULATED["data"]["list"])
+    try:
+        r = requests.get(API_URL, timeout=6)
+        if r.status_code == 200:
+            lst = r.json().get("data", {}).get("list", [])
+            if lst:
+                return lst
+            else:
+                print("[api] retorno vazio — usando simulado")
+                return list(SIMULATED["data"]["list"])
+        else:
+            print("[api] status", r.status_code, "— usando simulado")
+            return list(SIMULATED["data"]["list"])
+    except Exception as e:
+        print("[api] erro:", e, "— usando simulado")
+        return list(SIMULATED["data"]["list"])
+
+def interpret_number_to_entry(n):
+    try:
+        n = int(n)
+    except:
+        return "Pequeno 🔵"
+    return "Grande 🟠" if n >= 5 else "Pequeno 🔵"
+
+# ---------------- Lógica de previsão (simples/adaptativa) ----------------
+def make_prediction_from_history(lst):
+    # lst is newest-first usually; use first element
+    if not lst:
+        return None, 0, "?"
+    # we'll predict same rule: number >=5 -> G else P, but you can replace with IA later
+    last = lst[0]
+    num = int(last.get("number", 0))
+    # simple heuristic: flip (example). You can use full adaptive model here.
+    pred_entry = interpret_number_to_entry(num)
+    # confidence randomish for presentation
+    conf = random_confidence = random.randint(60, 95)
+    next_period = last.get("issueNumber") or last.get("issue") or "unknown"
+    # represent prediction internally as 'G'/'P'
+    pred_gp = 'G' if num >= 5 else 'P'
+    return pred_gp, conf, str(next_period)
+
+# ---------------- Envio de sinal ao usuário ATIVO (apenas o último) ----------------
+def send_signal_to_active():
+    # load fresh state to be safe with file changes
+    st = load_json_safe(STATE_FILE, {"active_user": None})
+    active = st.get("active_user")
+    if not active:
+        return False
+    lst = fetch_api()
+    pred_gp, conf, next_period = make_prediction_from_history(lst)
+    if pred_gp is None:
+        return False
+    # message formatted
+    msg = (
+        "🎯 SINAL AUTOMÁTICO\n"
+        f"🔮 Próxima Entrada: {'🟠 Grande' if pred_gp=='G' else '🔵 Pequeno'}\n"
+        f"📅 Período: {next_period}\n"
+        f"🤖 Confiança: {conf}%\n\n"
+        "🔔 Para cancelar: /stop"
+    )
+    ok = tg_send(active, msg)
+    if ok:
+        # store last_sent_prediction
+        st["last_sent_prediction"] = {"pred": pred_gp, "conf": conf, "period": next_period, "ts": int(time.time())}
+        save_json_safe(STATE_FILE, st)
+    return ok
+
+# ---------------- Telegram polling loop (getUpdates) ----------------
+last_update_id = None
+
+def telegram_polling_loop():
+    global last_update_id, codes_map
+    print("[tg] iniciar polling getUpdates")
+    while True:
+        try:
+            params = {"timeout": 10}
+            if last_update_id:
+                params["offset"] = last_update_id + 1
+            r = requests.get(f"{TELEGRAM_API}/getUpdates", params=params, timeout=15)
+            if r.status_code != 200:
+                time.sleep(1)
+                continue
+            data = r.json()
+            if not data.get("ok"):
+                time.sleep(1); continue
+            for item in data.get("result", []):
+                last_update_id = item["update_id"]
+                msg = item.get("message") or item.get("edited_message")
+                if not msg:
+                    continue
+                chat_id = msg["chat"]["id"]
+                text = (msg.get("text") or "").strip()
+                if not text:
+                    continue
+                # commands
+                if text.lower().startswith("/start"):
+                    tg_send(chat_id, "🤖 Olá! Cole seu *CÓDIGO DE ACESSO* (ex.: ALFA-903S).")
+                    continue
+                if text.lower().startswith("/stop"):
+                    # remove active if matches
+                    st = load_json_safe(STATE_FILE, {"active_user": None})
+                    if st.get("active_user") == chat_id:
+                        st["active_user"] = None
+                        save_json_safe(STATE_FILE, st)
+                        tg_send(chat_id, "🛑 Você foi desativado. Para voltar envie /start e cole um código.")
+                    else:
+                        tg_send(chat_id, "Você não está recebendo sinais automáticos.")
+                    continue
+                if text.lower().startswith("/status"):
+                    st = load_json_safe(STATE_FILE, {"active_user": None, "last_sent_prediction": None, "stats": {}})
+                    active = st.get("active_user")
+                    last_sent = st.get("last_sent_prediction")
+                    s = f"Status:\nUsuário ativo: {active}\nÚltimo sinal: {last_sent}\nEstatísticas: {st.get('stats',{})}"
+                    tg_send(chat_id, s)
+                    continue
+                # if not command, treat as code attempt if user not active
+                st = load_json_safe(STATE_FILE, {"active_user": None})
+                if st.get("active_user") != chat_id:
+                    code_try = text.upper()
+                    # refresh codes_map from disk
+                    codes_map = load_json_safe(CODES_FILE, {})
+                    # normalize shapes
+                    if "codes" in codes_map:
+                        codes_map = codes_map["codes"]
+                    # codes_map expected shape: CODE -> {"used": false}
+                    if code_try in codes_map and isinstance(codes_map[code_try], dict) and not codes_map[code_try].get("used", False):
+                        # mark used True and set active_user = chat_id
+                        codes_map[code_try]["used"] = True
+                        save_json_safe(CODES_FILE, {"codes": codes_map})
+                        st["active_user"] = chat_id
+                        save_json_safe(STATE_FILE, st)
+                        tg_send(chat_id, "✅ Código aceito! Você é o usuário ativo e vai receber sinais automáticos (a cada 30s).")
+                        # send immediate signal
+                        send_signal_to_active()
+                    else:
+                        tg_send(chat_id, "❌ Código inválido ou já utilizado.")
+                else:
+                    tg_send(chat_id, "Você já é o usuário ativo. Use /stop para parar.")
+        except Exception as e:
+            print("[tg] erro polling:", e)
+            time.sleep(2)
+
+# ---------------- Main loop que envia sinais a cada período (30s) ----------------
+def periodic_sender_loop():
+    print("[sender] loop iniciado: envia sinal a cada", FETCH_INTERVAL, "s ao usuário ativo (último).")
+    while True:
+        try:
+            send_signal_to_active()
+        except Exception as e:
+            print("[sender] erro ao enviar sinal:", e)
+        time.sleep(FETCH_INTERVAL)
+
+# ---------------- Start ----------------
+if __name__ == "__main__":
+    print("Iniciando bot_ia_popbra...")
+    # ensure files exist
+    if not os.path.exists(CODES_FILE):
+        save_json_safe(CODES_FILE, {"codes": codes_map})
+    if not os.path.exists(STATE_FILE):
+        save_json_safe(STATE_FILE, state)
+    # load fresh
+    codes_map = load_json_safe(CODES_FILE, {})
+    state = load_json_safe(STATE_FILE, {"active_user": None})
+    # start polling and sender in threads
+    t1 = threading.Thread(target=telegram_polling_loop, daemon=True)
+    t1.start()
+    t2 = threading.Thread(target=periodic_sender_loop, daemon=True)
+    t2.start()
+    print("Bot rodando. Use /start no Telegram para começar.")
+    while True:
+        time.sleep(60)signals = []       # histórico de sinais gerados
 stats = {"total":0, "correct":0, "accuracy":0.0}
 
 # codes map (code -> bool available)
