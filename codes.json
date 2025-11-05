@@ -1,18 +1,14 @@
 {
-  "ALFA-9Q3S": false,
-  "ALFA-10W6E": false,
-  "ALFA-11D8F": false,
-  "ALFA-12K7N": false,
-  "ALFA-13P4J": false,
-  "ALFA-14Z9C": false,
-  "ALFA-15M2T": false,
-  "ALFA-16B5Y": false,
-  "ALFA-1A9X" : false,
-  "ALFA-2B7Q" : false,
-  "ALFA-3K4P" : false,
-  "ALFA-4M8Z" : false,
-  "ALFA-5T2W" : false,
-  "ALFA-6H6R" : false,
-  "ALFA-7P5D" : false,
-  "ALFA-8V9L" : false
+  "codes": {
+    "ALFA-9O3S": true,
+    "ALFA-1OW6E": true,
+    "ALFA-8Q2DP": true,
+    "ALFA-5L9XZ": true,
+    "ALFA-7R1CJ": true,
+    "ALFA-2M8YT": true,
+    "ALFA-4Q7BF": true,
+    "ALFA-6P1DV": true,
+    "ALFA-3K9WN": true,
+    "ALFA-0S5JG": true
+  }
 }
