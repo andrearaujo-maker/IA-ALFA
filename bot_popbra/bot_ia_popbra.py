@@ -170,12 +170,7 @@ def fetch_api_list():
   
 # ---------------- Adaptive predictor (same idea as before, compacted) ----------------  
 def find_pattern_candidates(seq_str):  
-    candidates = []  
-    n = len(seq_str)  
-    if n < 2:  
-        return candidates  
-    for w in ANAlYZE_WINDOW_SIZES_PLACEHOLDER:  # will be replaced below properly  
-        pass  
+    candidates = []   
   
 # We'll implement predictive functions directly (cleaner)  
 def find_pattern_candidates_seq(seq_str):  
