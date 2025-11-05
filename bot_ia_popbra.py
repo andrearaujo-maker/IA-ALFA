@@ -403,7 +403,8 @@ if __name__ == "__main__":
     t2.start()
     print("Bot iniciado. Peça para clientes enviarem /start e depois COLAREM o código.")
     while True:
-        time.sleep(30)stats = {"total":0, "correct":0, "accuracy":0.0}
+        time.sleep(30)
+        stats = {"total":0, "correct":0, "accuracy":0.0}
 
 access_codes = {}       # código → True/False
 
