@@ -1,1 +1,9 @@
-{"subscribers": {} }
+{
+  "active_user": null,
+  "last_sent_prediction": null,
+  "stats": {
+    "total": 0,
+    "correct": 0,
+    "accuracy": 0.0
+  }
+}
