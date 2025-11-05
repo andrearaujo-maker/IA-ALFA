@@ -375,6 +375,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Encerrando...")    
         if not os.path.exists(path):
+            return default
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
