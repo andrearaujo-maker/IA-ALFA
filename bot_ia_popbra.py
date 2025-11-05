@@ -373,7 +373,8 @@ if __name__ == "__main__":
         while True:
             time.sleep(30)
     except KeyboardInterrupt:
-        print("Encerrando...")    if not os.path.exists(path):
+        print("Encerrando...")    
+        if not os.path.exists(path):
         return default
     try:
         with open(path, "r", encoding="utf-8") as f:
