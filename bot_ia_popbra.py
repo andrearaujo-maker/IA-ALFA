@@ -375,7 +375,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Encerrando...")    
         if not os.path.exists(path):
-        return default
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -616,23 +615,7 @@ def handle_stop(chat_id):
 # ============================================================
 
 if __name__ == "__main__":
-    print("Iniciando bot...")
-
-    # cria arquivos se não existirem
-    if not os.path.exists(CODES_FILE):
-        save_json_safe(CODES_FILE, {"codes": ["COD123"]})
-
-    if not os.path.exists(STATE_FILE):
-        save_json_safe(STATE_FILE, {"active_user": None})
-
-    # inicia threads
-    t1 = threading.Thread(target=telegram_polling_loop, daemon=True)
-    t1.start()
-
-    t2 = threading.Thread(target=periodic_sender_loop, daemon=True)
-    t2.start()
-
-    print("Bot rodando. Use /start no Telegram.")
-
-    while True:
-        time.sleep(60)
+    try:
+        start_all()
+    except KeyboardInterrupt:
+        print("Encerrando...")
