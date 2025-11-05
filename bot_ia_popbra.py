@@ -375,7 +375,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Encerrando...")    
         if os.path.exists(PERSIST_FILE):
-        try:
+          try:
             with open(PERSIST_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # load subscribers
