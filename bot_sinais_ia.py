@@ -1,1 +1,0 @@
-print("Bot sinais IA iniciado")
